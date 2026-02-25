@@ -1,0 +1,24 @@
+name = "myrqai-development"
+main = "worker.js"
+compatibility_date = "2026-02-20"
+
+compatibility_flags = ["nodejs_compat"]
+
+
+# ---------- DEV ----------
+[env.dev]
+name = "myrqai-development"
+compatibility_flags = ["nodejs_compat"]
+
+[env.dev.vars]
+ENV = "dev"
+ADMIN_TOKEN = "MYRQAI_SUPER_SECRET_123"
+
+# ---------- PROD ----------
+[env.prod]
+name = "myrqai-prod"
+compatibility_flags = ["nodejs_compat"]
+
+[env.dev.vars]
+ENV = "PROD"
+ADMIN_TOKEN = "MYRQAI_SUPER_SECRET_123"

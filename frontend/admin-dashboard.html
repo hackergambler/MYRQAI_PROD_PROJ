@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TERMINAL — ADMIN_HUD_V4</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script async 
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8668540803235423"
+    crossorigin="anonymous">
+  </script>
+
+  <style>
+    :root {
+      --glitch-green: #00ff41;
+      --dark-void: #020617;
+      --error-red: #ff003c;
+      --warning-gold: #ffcc00;
+      --panel-bg: rgba(2, 6, 23, 0.7);
+    }
+
+    * { box-sizing: border-box; cursor: crosshair; }
+
+    body {
+      margin: 0;
+      font-family: 'JetBrains Mono', monospace;
+      background: radial-gradient(circle at center, #0a1128 0%, var(--dark-void) 100%);
+      background-attachment: fixed;
+      color: var(--glitch-green);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      padding: 15px;
+    }
+
+    /* HEXAGON OVERLAY */
+    body::after {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMzAgMEw2MCAxNVY0NUwzMCA2MEwwIDQ1VjE1TDMwIDBaIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMCwgMjU1LCA2NSwgMC4wNSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvc3ZnPg==');
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    #canvas-matrix {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 0; opacity: 0.15; pointer-events: none;
+    }
+
+    .container { position: relative; z-index: 10; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+    /* HEADER */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      border: 1px solid var(--glitch-green);
+      background: var(--panel-bg);
+      margin-bottom: 20px;
+      box-shadow: inset 0 0 15px rgba(0, 255, 65, 0.2);
+    }
+
+    .system-status { font-size: 10px; display: flex; gap: 20px; color: #fff; }
+    .status-dot { color: var(--glitch-green); animation: blink 1s infinite; }
+
+    /* STATS CARDS */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 255, 65, 0.2);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "DATA_NODE";
+      position: absolute;
+      top: 5px; right: 10px;
+      font-size: 8px; opacity: 0.3;
+    }
+
+    .stat-val { font-size: 38px; font-weight: bold; color: #fff; text-shadow: 0 0 10px var(--glitch-green); }
+    .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.8; }
+
+    /* LOGOUT BUTTON STYLE */
+    .logout {
+      background: transparent;
+      border: 1px solid var(--error-red);
+      color: var(--error-red);
+      padding: 8px 15px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .logout:hover {
+      background: var(--error-red);
+      color: #fff;
+      box-shadow: 0 0 15px var(--error-red);
+    }
+
+    /* MAIN ROW */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 15px;
+    }
+
+    /* TERMINAL LOG */
+    .terminal-log {
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid var(--glitch-green);
+      height: 200px;
+      padding: 10px;
+      font-size: 11px;
+      overflow-y: auto;
+      margin-top: 15px;
+      box-shadow: inset 0 0 10px #000;
+    }
+
+    .log-entry { margin-bottom: 4px; border-left: 2px solid var(--glitch-green); padding-left: 8px; }
+    .log-time { color: var(--warning-gold); margin-right: 10px; }
+
+    /* ALERTS PANEL */
+    .alert-card {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .list-container {
+      flex-grow: 1;
+      overflow-y: auto;
+      max-height: 500px;
+    }
+
+    .alert-item {
+      padding: 12px;
+      border-bottom: 1px solid rgba(0, 255, 65, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background 0.3s;
+    }
+
+    .alert-item:hover { background: rgba(0, 255, 65, 0.05); }
+
+    /* ANIMATIONS */
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+    
+    .scanline {
+      width: 100%; height: 2px;
+      background: rgba(0, 255, 65, 0.1);
+      position: absolute;
+      animation: scan 4s linear infinite;
+    }
+    @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+    @media (max-width: 1000px) { .main-layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+
+<body>
+
+<canvas id="canvas-matrix"></canvas>
+
+<div class="container">
+  <div class="topbar">
+    <div>
+      <h1>[ UPLINK_ADMIN_HUD_V.4.2 ]</h1>
+      <div class="system-status">
+        <span><span class="status-dot">●</span> CORE_TEMP: 42°C</span>
+        <span><span class="status-dot">●</span> NODE_STATUS: ENCRYPTED</span>
+        <span id="live-clock">00:00:00</span>
+      </div>
+    </div>
+    <button class="logout" onclick="logout()">>> TERMINATE_SESSION</button>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="scanline"></div><div class="label">Total Packets</div><div id="send" class="stat-val">0</div></div>
+    <div class="card"><div class="scanline"></div><div class="label">Unlocked Data</div><div id="unlock" class="stat-val">0</div></div>
+    <div class="card"><div class="scanline"></div><div class="label">Wall Blocks</div><div id="blocked" class="stat-val" style="color:var(--warning-gold)">0</div></div>
+    <div class="card"><div class="scanline"></div><div class="label">Threat Vectors</div><div id="abuse" class="stat-val" style="color:var(--error-red)">0</div></div>
+  </div>
+
+  <div class="main-layout">
+    <div class="column-left">
+      <div class="card" style="height: 400px;">
+        <div class="label">>> NETWORK_TRAFFIC_LIVE_SAT_COM</div>
+        <canvas id="chart"></canvas>
+      </div>
+
+      <div class="terminal-log" id="terminalLog">
+        <div class="log-entry"><span class="log-time">[SYSTEM]</span> INITIALIZING_ADMIN_UPLINK... DONE.</div>
+        <div class="log-entry"><span class="log-time">[SYSTEM]</span> ESTABLISHING_SECURE_HANDSHAKE... SUCCESS.</div>
+      </div>
+    </div>
+
+    <div class="column-right">
+      <div class="card alert-card">
+        <div class="label" style="color: var(--error-red); margin-bottom: 15px;">🚨 THREAT_DETECTION_LOG</div>
+        <div id="alerts" class="list-container"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* CLOCK */
+function updateClock() {
+  document.getElementById('live-clock').innerText = new Date().toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+
+/* TERMINAL LOG SIMULATOR */
+function addLog(msg) {
+  const log = document.getElementById('terminalLog');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  const time = new Date().toLocaleTimeString();
+  entry.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+  log.prepend(entry);
+  if(log.children.length > 50) log.lastChild.remove();
+}
+
+/* MATRIX BG */
+const canvas = document.getElementById('canvas-matrix');
+const ctx = canvas.getContext('2d');
+let w, h, cols;
+function setSize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; cols = Math.floor(w/15); }
+window.onresize = setSize; setSize();
+const drops = Array(cols).fill(1);
+function matrix() {
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.1)';
+  ctx.fillRect(0,0,w,h);
+  ctx.fillStyle = '#0f4'; ctx.font = '14px monospace';
+  drops.forEach((y, i) => {
+    const text = Math.random() > 0.5 ? "1" : "0";
+    ctx.fillText(text, i*15, y*15);
+    if(y*15 > h && Math.random() > 0.98) drops[i] = 0;
+    drops[i]++;
+  });
+}
+setInterval(matrix, 40);
+
+/* --- API & AUTH LOGIC --- */
+const API = "https://myrqai-prod.tibco-tibco-8.workers.dev";
+const token = localStorage.getItem("admin_token");
+
+// Redirect if not logged in
+if(!token) {
+  location.href = "admin-login.html";
+}
+
+function logout(){ 
+  localStorage.removeItem("admin_token"); 
+  location.href = "admin-login.html"; 
+}
+
+/* CHART SETUP */
+let labels=[], sendData=[];
+const chart = new Chart(document.getElementById("chart"), {
+  type: "line",
+  data: {
+    labels,
+    datasets: [{
+      label: "LIVE_TRAFFIC",
+      data: sendData,
+      borderColor: "#00ff41",
+      backgroundColor: "rgba(0, 255, 65, 0.05)",
+      borderWidth: 1,
+      tension: 0.3,
+      fill: true,
+      pointRadius: 2
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(0,255,65,0.05)' }, ticks: { color: '#0f4', font: {size: 9} } },
+      y: { grid: { color: 'rgba(0,255,65,0.05)' }, ticks: { color: '#0f4', font: {size: 9} } }
+    }
+  }
+});
+
+/* DATA REFRESH */
+async function refreshData() {
+  try {
+    const res = await fetch(`${API}/api/admin/stats`, { 
+        headers: { "x-admin-token": token } 
+    });
+    
+    if(res.status === 401) logout();
+    
+    const data = await res.json();
+    if (!data.success) return;
+
+    // Map Worker JSON structure to UI IDs
+    document.getElementById("send").innerText = data.stats.send || 0;
+    document.getElementById("unlock").innerText = data.stats.get || 0; // "get" in worker is "unlock" here
+    document.getElementById("blocked").innerText = data.stats.blocked || 0;
+    document.getElementById("abuse").innerText = data.stats.abuse || 0;
+
+    // Update Chart
+    const timeLabel = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    labels.push(timeLabel);
+    sendData.push(data.stats.send || 0);
+    
+    if(labels.length > 20) { labels.shift(); sendData.shift(); }
+    chart.update('none');
+
+    if(Math.random() > 0.8) addLog(`STREAM_SYNC: Received ${data.stats.send} packets from encrypted nodes.`);
+  } catch(e) { 
+    addLog("UPLINK_SYNC_ERROR: RECONNECTING TO CORE..."); 
+  }
+}
+
+async function refreshAlerts() {
+  try {
+    const res = await fetch(`${API}/api/admin/alerts`, { 
+        headers: { "x-admin-token": token } 
+    });
+    const data = await res.json();
+    const container = document.getElementById("alerts");
+    container.innerHTML = "";
+
+    if (data.alerts && data.alerts.length > 0) {
+      data.alerts.forEach(a => {
+        const item = document.createElement('div');
+        item.className = 'alert-item';
+        item.innerHTML = `
+          <span class="status-dot" style="color:var(--error-red)">●</span>
+          <div style="flex-grow:1">
+            <div style="font-size:12px; color:#fff">${a.ip}</div>
+            <div style="font-size:9px; opacity:0.6">${a.country} | ${new Date(a.time).toLocaleTimeString()}</div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+      addLog(`SECURITY: ${data.alerts.length} threat signatures active.`);
+    } else {
+        container.innerHTML = "<div style='padding:20px; font-size:10px; opacity:0.3; text-align:center;'>NO_ACTIVE_THREATS</div>";
+    }
+  } catch(e) {
+      console.error("Alerts sync failed");
+  }
+}
+
+// Initialization and intervals
+setInterval(refreshData, 3000);
+setInterval(refreshAlerts, 8000);
+refreshData(); 
+refreshAlerts();
+</script>
+
+</body>
+</html>

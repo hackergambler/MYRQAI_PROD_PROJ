@@ -1,0 +1,221 @@
+/* === TERMINAL CORE VARIABLES === */
+:root {
+  --glitch-green: #00ff41;
+  --dark-void: #020617;
+  /* HUD Transparency: Set to 0 to allow the background image to show through cards */
+  --terminal-bg: rgba(2, 6, 23, 0); 
+  --error-red: #ff003c;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  cursor: crosshair;
+}
+
+/* === TERMINAL BACKGROUND (FIXED LOGO) === */
+body {
+  /* This handles the logo as a fixed background layer */
+  background: url('/mylogo.png') no-repeat center center fixed; 
+  background-size: cover;
+  background-color: var(--dark-void);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--glitch-green);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* SUBTLE CRT SCANLINE OVERLAY */
+body::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+              linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+  z-index: 5;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+
+.container {
+  width: 100%;
+  padding: 16px;
+  z-index: 10;
+  position: relative;
+}
+
+/* === MAIN HACKER CARD (TRANSPARENT HUD) === */
+.card {
+  background: var(--terminal-bg);
+  padding: 35px 24px;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 440px;
+  border: 1px solid rgba(0, 255, 65, 0.2); /* Subtle glass edge */
+  text-align: center;
+  position: relative;
+  margin: 0 auto;
+  backdrop-filter: blur(4px); /* Optional: adds a slight frost to the glass */
+  animation: fadeIn .6s ease-out;
+}
+
+/* CORNER BRACKETS WITH GLOW */
+.card::before, .card::after {
+  content: "";
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--glitch-green);
+  z-index: 11;
+  animation: bracket-glow 4s ease-in-out infinite;
+}
+.card::before { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
+.card::after { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
+
+@keyframes bracket-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px var(--glitch-green)); opacity: 0.4; }
+  50% { filter: drop-shadow(0 0 10px var(--glitch-green)); opacity: 1; }
+}
+
+/* === HEADINGS === */
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 10px var(--glitch-green);
+}
+
+.tagline {
+  opacity: .75;
+  margin: 10px 0 20px;
+  font-size: .85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* === INPUTS - Opaque backgrounds for readability against the logo === */
+textarea, input {
+  width: 100%;
+  padding: 15px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.85); /* Keeps text legible over the background image */
+  border: 1px solid var(--glitch-green);
+  color: var(--glitch-green);
+  font-family: inherit;
+  outline: none;
+  transition: 0.3s;
+}
+
+textarea:focus, input:focus {
+  background: rgba(2, 6, 23, 0.95);
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+}
+
+/* === EXECUTE BUTTON === */
+.btn {
+  width: 100%;
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--glitch-green);
+  background: rgba(2, 6, 23, 0.85);
+  color: var(--glitch-green);
+  font-weight: bold;
+  font-family: inherit;
+  text-transform: uppercase;
+  cursor: pointer !important;
+  letter-spacing: 2px;
+  transition: 0.3s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--glitch-green);
+  color: var(--dark-void);
+  box-shadow: 0 0 25px var(--glitch-green);
+}
+
+.btn:disabled {
+  opacity: 0.2;
+  cursor: not-allowed !important;
+}
+
+/* === SPY MODE / ATTRACTOR === */
+.spy-mode {
+  margin-top: 25px;
+  padding: 20px;
+  border-radius: 4px;
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px dashed var(--glitch-green);
+  position: relative;
+  text-align: left;
+  transition: 0.3s;
+}
+
+.spy-mode:hover {
+  transform: scale(1.02);
+  border-style: solid;
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+}
+
+.spy-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--glitch-green);
+  color: var(--dark-void);
+  font-size: 9px;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 2px;
+}
+
+/* === RESULT BOX === */
+.result {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.9);
+  border: 1px dashed var(--glitch-green);
+}
+
+/* === FOOTER === */
+footer {
+  margin-top: 25px;
+  padding: 15px;
+  background: rgba(2, 6, 23, 0.7);
+  border-radius: 4px;
+  font-size: .7rem;
+}
+
+footer a {
+  color: var(--glitch-green);
+  text-decoration: none;
+  margin: 0 10px;
+  opacity: 0.8;
+  transition: 0.3s;
+}
+
+footer a:hover {
+  opacity: 1;
+  text-shadow: 0 0 8px var(--glitch-green);
+}
+
+/* === ANIMATIONS === */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* MOBILE SPACING */
+@media (max-width: 480px) {
+  .card { padding: 25px 20px; }
+  h1 { font-size: 1.2rem; }
+}

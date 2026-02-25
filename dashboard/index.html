@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MYRQAI Admin Dashboard</title>
+
+<style>
+body {
+  background: linear-gradient(135deg,#020617,#020617,#0f172a);
+  font-family: system-ui;
+  margin: 0;
+  min-height: 100vh;
+  color: white;
+}
+
+header {
+  text-align: center;
+  font-size: 22px;
+  padding: 20px;
+  background: #020617;
+  box-shadow: 0 0 30px rgba(56,189,248,.4);
+}
+
+.container {
+  max-width: 900px;
+  margin: 40px auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  padding: 15px;
+}
+
+.card {
+  background: #020617;
+  border-radius: 16px;
+  padding: 25px;
+  text-align: center;
+  box-shadow: 0 0 30px rgba(56,189,248,.25);
+}
+
+.value {
+  font-size: 38px;
+  font-weight: bold;
+  margin-top: 10px;
+  color: #38bdf8;
+}
+
+footer {
+  text-align: center;
+  opacity: .5;
+  padding: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<header>📊 MYRQAI Admin Dashboard</header>
+
+<div class="container">
+
+  <div class="card">
+    <h3>Total Messages Sent</h3>
+    <div class="value" id="sent">0</div>
+  </div>
+
+  <div class="card">
+    <h3>Total Messages Read</h3>
+    <div class="value" id="read">0</div>
+  </div>
+
+  <div class="card">
+    <h3>Active Keys</h3>
+    <div class="value" id="active">0</div>
+  </div>
+
+  <div class="card">
+    <h3>Server Time</h3>
+    <div class="value" id="time">--</div>
+  </div>
+
+</div>
+
+<footer>MYRQAI • Secure Analytics Panel</footer>
+
+<script>
+const ADMIN_TOKEN = "MYRQAI_SUPER_SECRET_123";
+
+async function loadStats(){
+  const r = await fetch("https://api.myrqai.com/admin/stats", {
+    headers: { "x-admin-token": ADMIN_TOKEN }
+  });
+
+  if(!r.ok){
+    alert("Unauthorized Access");
+    return;
+  }
+
+  const j = await r.json();
+
+  sent.innerText = j.totalSent;
+  read.innerText = j.totalRead;
+  active.innerText = j.activeKeys;
+  time.innerText = new Date(j.serverTime).toLocaleString();
+}
+
+loadStats();
+setInterval(loadStats, 5000);
+</script>
+
+</body>
+</html>

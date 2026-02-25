@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>The Myrq Protocol: Ghost Signal</title>
+  <meta name="description" content="You are a Signal Hunter. Scan, synthesize, and reconstruct the Master Manifest." />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+  <canvas id="matrix" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🜏</span>
+      <div class="brand-text">
+        <div class="brand-title">THE MYRQ PROTOCOL</div>
+        <div class="brand-sub">GHOST SIGNAL // 2026</div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="scanBtn" class="chip" type="button">SCAN</button>
+      <button id="soundToggle" class="chip" type="button">SOUND: OFF</button>
+
+      <div class="menu">
+        <button id="menuBtn" class="chip" type="button" aria-haspopup="true" aria-expanded="false">MENU ▾</button>
+        <div id="menuDrop" class="menu-drop" role="menu" aria-label="Menu">
+          <button class="menu-item" id="openOnboarding" type="button" role="menuitem">How it works</button>
+          <button class="menu-item" id="genChallenge" type="button" role="menuitem">Generate challenge code</button>
+          <button class="menu-item" id="clearProgress" type="button" role="menuitem">Reset progress</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="side">
+      <div class="side-card">
+        <div class="side-title">Signal Feed</div>
+        <div class="side-text">Incoming fragments from Myrq’s breach. Click a signal to synthesize it.</div>
+
+        <div class="meter">
+          <div class="meter-head">
+            <div class="meter-title">SYNCHRONICITY</div>
+            <div class="meter-meta"><span id="syncPct">0</span>%</div>
+          </div>
+          <div class="meter-bar"><div id="syncFill" class="meter-fill"></div></div>
+          <div class="meter-sub">No storage. Progress is read from URL flags: <code>?solved_0x0F1=1</code></div>
+        </div>
+
+        <div id="signals" class="signals">
+          <div class="side-text muted tiny" id="signalsHint">Press SCAN to load signals…</div>
+        </div>
+
+        <div class="side-text muted tiny">Source: <span id="signalsUrlLabel"></span></div>
+      </div>
+
+      <div class="side-card">
+        <div class="side-title">Challenge Code</div>
+        <div class="side-text">Invite another Signal Hunter.</div>
+        <div class="row">
+          <input id="challengeOut" class="pw" placeholder="code appears here" readonly />
+          <button id="copyChallengeBtn" class="btn ghost small" type="button">COPY</button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="panel" role="region" aria-label="Ghost Signal Terminal">
+      <div class="panel-head">
+        <div class="badge" id="phaseBadge">SCANNING</div>
+        <h1 class="title glitch" data-text="GHOST SIGNAL">GHOST SIGNAL</h1>
+        <p class="subtitle">You are a <b>Signal Hunter</b>. Reconstruct the <b>Master Manifest</b> by solving fragments.</p>
+      </div>
+
+      <div class="mission" id="mission">
+        <div class="mission-title">WHAT TO DO</div>
+        <ol class="mission-steps">
+          <li>Press <b>SCAN</b> to fetch signals (JSON).</li>
+          <li>Click a <b>Signal Card</b> → <b>SYNTHESIZE</b> in RAM (Virtual Merger).</li>
+          <li>Solve the puzzle → URL gains <code>solved_*</code> flags → Synchronicity rises.</li>
+          <li>Each solved puzzle unlocks a <b>Fragment</b> in the terminal stream.</li>
+        </ol>
+      </div>
+
+      <div class="controls">
+        <div class="input-wrap">
+          <label class="sr-only" for="keyInput">Key</label>
+          <input id="keyInput" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 placeholder="paste enc:v1 fragment here to decrypt (Puzzle 3), or type keys from vault" />
+
+
+        <button id="unlockBtn" class="btn primary" type="button"><span class="dot"></span> UNLOCK</button>
+      </div>
+
+      <div class="actions">
+        <button id="helpBtn" class="btn ghost" type="button">HELP</button>
+        <button id="clearBtn" class="btn ghost" type="button">CLEAR</button>
+      </div>
+
+      <div class="status-row">
+        <div id="status" class="status" aria-live="polite"></div>
+        <div class="live"><span class="pulse"></span> LIVE</div>
+      </div>
+
+      <div class="stream" id="voidStream" aria-live="polite"></div>
+
+      <footer class="footer">
+        <div class="tiny">⚠️ Puzzle vault. Don’t use for harm.</div>
+        <div class="tiny muted">© MyrqAI</div>
+      </footer>
+    </section>
+
+    <div id="onboarding" class="modal" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-title">The Myrq Protocol</div>
+        <div class="modal-text">
+          <p><b>Loop:</b> Scan → Click Signal → Synthesize → Solve → Unlock.</p>
+          <p><b>Progress:</b> Synchronicity reads URL flags like <code>solved_0x0F1=1</code>.</p>
+          <p class="muted tiny">Auto-closes in <span id="obTimer">10</span>s.</p>
+        </div>
+        <div class="modal-actions">
+          <button id="closeOnboarding" class="btn primary" type="button">ENTER TERMINAL</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="puzzleModal" class="modal" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-title" id="puzTitle">Signal</div>
+        <div class="modal-text">
+          <div class="tiny muted" id="puzMeta"></div>
+          <p id="puzPrompt"></p>
+          <textarea id="puzPayload" class="ta" rows="3" readonly></textarea>
+          <input id="puzAnswer" class="pw" placeholder="enter answer" />
+        </div>
+        <div class="modal-actions">
+          <button id="puzSolve" class="btn primary" type="button">SOLVE</button>
+          <button id="puzClose" class="btn ghost" type="button">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // IMPORTANT: because you open /void/void.html, the JSON must be under /void/
+    window.__PUZZLES_URL__ = "./puzzles.master.json";
+
+    window.__API_BASE__ = window.__API_BASE__ || "";
+    window.__GEMINI_API_KEY__ = window.__GEMINI_API_KEY__ || "";
+    window.__DAILY_PULSE__ = (typeof window.__DAILY_PULSE__ === "boolean") ? window.__DAILY_PULSE__ : false;
+  </script>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

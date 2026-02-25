@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TERMINAL – SEND SECRET</title>
+
+<!-- ✅ Google AdSense -->
+<script async 
+  src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8668540803235423"
+  crossorigin="anonymous">
+</script>
+
+<style>
+/* === ADVANCED HACKER UI VARIABLES === */
+:root {
+  --glitch-green: #00ff41;
+  --dark-void: #020617;
+  --terminal-bg: transparent; 
+}
+
+* { box-sizing: border-box; cursor: crosshair; }
+
+/* === PRESERVED HACKER SCROLLBAR === */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: var(--dark-void); }
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.1);
+  border: 1px solid var(--glitch-green);
+}
+
+body {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  background-color: var(--dark-void);
+  color: var(--glitch-green);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px 0;
+}
+
+/* CODE RAIN CANVAS */
+#canvas-matrix {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  opacity: 0.15;
+}
+
+/* LOGO CONTAINER */
+.logo-container {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  z-index: 10;
+  margin-bottom: 10px;
+}
+
+.logo-container img {
+  width: 100%;
+  height: auto;
+  animation: logo-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes logo-shimmer {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 5px var(--glitch-green)); }
+  50% { filter: brightness(1.5) drop-shadow(0 0 15px var(--glitch-green)); transform: scale(1.01); }
+}
+
+/* THE PROPER HACKER FRAME */
+.card {
+  background: var(--terminal-bg);
+  padding: 40px;
+  border: 1px solid rgba(0, 255, 65, 0.15);
+  border-radius: 4px;
+  width: 92%;
+  max-width: 500px;
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  margin-bottom: 60px;
+  animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* CORNER BRACKETS */
+.card::before, .card::after, .corner-accent::before, .corner-accent::after {
+  content: ""; position: absolute; width: 30px; height: 30px; border: 3px solid var(--glitch-green); z-index: 11; animation: bracket-glow 4s ease-in-out infinite;
+}
+.card::before { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
+.card::after { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
+.corner-accent::before { top: -8px; right: -8px; border-left: 0; border-bottom: 0; }
+.corner-accent::after { bottom: -8px; left: -8px; border-right: 0; border-top: 0; }
+
+@keyframes bracket-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px var(--glitch-green)); opacity: 0.4; }
+  50% { filter: drop-shadow(0 0 10px var(--glitch-green)); opacity: 1; }
+}
+
+h1 { font-size: 1.3rem; text-transform: uppercase; letter-spacing: 3px; margin: 0; color: #fff; text-shadow: 0 0 10px var(--glitch-green); }
+
+.tagline { font-size: 11px; opacity: 0.7; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* INPUTS */
+input, textarea {
+  width: 100%;
+  padding: 15px;
+  margin-top: 15px;
+  border: 1px solid var(--glitch-green);
+  background: rgba(2, 6, 23, 0.9); 
+  color: var(--glitch-green);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  border-radius: 4px;
+  transition: 0.3s;
+}
+
+input:focus, textarea:focus {
+  border-color: #fff;
+  background: rgba(0, 255, 65, 0.05);
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.1);
+}
+
+textarea { min-height: 120px; resize: none; }
+
+/* BUTTONS */
+button {
+  width: 100%;
+  padding: 16px;
+  margin-top: 20px;
+  border: 1px solid var(--glitch-green);
+  background: rgba(0, 255, 65, 0.1);
+  color: var(--glitch-green);
+  font-weight: bold;
+  font-family: inherit;
+  text-transform: uppercase;
+  cursor: pointer !important;
+  transition: 0.3s;
+  border-radius: 4px;
+}
+
+button:hover {
+  background: var(--glitch-green);
+  color: var(--dark-void);
+  box-shadow: 0 0 25px var(--glitch-green);
+}
+
+.back-btn {
+  background: transparent;
+  border: 1px solid rgba(0, 255, 65, 0.3);
+  font-size: 11px;
+  margin-top: 15px;
+}
+
+/* RESULT OUTPUT - FIXED FOR OVERFLOW */
+.result {
+  margin-top: 20px;
+  padding: 15px;
+  text-align: left;
+  border: 1px dashed var(--glitch-green);
+  background: rgba(2, 6, 23, 0.95);
+  border-radius: 4px;
+  
+  /* CRITICAL WRAPPING LOGIC */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  white-space: pre-wrap;
+  
+  font-size: 13px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+@media (max-width: 480px) {
+  .card { padding: 25px; margin-top: 20px; }
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas-matrix"></canvas>
+
+<div class="logo-container">
+  <img src="/mylogo.png" alt="MYRQAI LOGO">
+</div>
+
+<div class="card">
+  <div class="corner-accent"></div>
+  
+  <h1>> INJECT_SECRET</h1>
+  <p class="tagline">Level 4 Encryption Active</p>
+
+  <input id="key" placeholder="[SET_DECRYPTION_KEY]" autocomplete="off">
+  <textarea id="msg" placeholder="[ENTER_SECRET_PAYLOAD]"></textarea>
+
+  <button id="sendBtn">Execute Upload</button>
+
+  <div id="out" class="result" style="display:none;"></div>
+
+  <button class="back-btn" onclick="location.href='index.html'">
+    [ ABORT_TO_BASE ]
+  </button>
+</div>
+
+<script>
+/* MATRIX CANVAS */
+const canvas = document.getElementById('canvas-matrix');
+const ctx = canvas.getContext('2d');
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
+
+const chars = "0101010101ABCDEFGHJKLMNOPQRSTUVWXYZ$#@%";
+const fontSize = 16;
+const columns = Math.floor(canvas.width / fontSize);
+const drops = Array(columns).fill(1);
+
+function draw() {
+  ctx.fillStyle = "rgba(2, 6, 23, 0.1)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#00ff41";
+  ctx.font = fontSize + "px monospace";
+  drops.forEach((y, i) => {
+    const text = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(text, i * fontSize, y * fontSize);
+    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}
+setInterval(draw, 35);
+</script>
+
+<script type="module" src="app.js"></script>
+
+</body>
+</html>

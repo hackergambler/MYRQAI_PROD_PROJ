@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TERMINAL — TERMS_OF_SERVICE</title>
+
+<!-- ✅ Google AdSense -->
+<script async 
+  src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8668540803235423"
+  crossorigin="anonymous">
+</script>
+
+<style>
+/* === HACKER THEME VARIABLES === */
+:root {
+  --glitch-green: #00ff41;
+  --dark-void: #020617;
+  --terminal-bg: transparent; 
+}
+
+* { box-sizing: border-box; cursor: crosshair; }
+
+/* === CUSTOM HACKER SCROLLBAR === */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--dark-void); }
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.2);
+  border: 1px solid var(--glitch-green);
+}
+
+body {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  background: radial-gradient(circle at center, #0a1128 0%, var(--dark-void) 100%);
+  background-attachment: fixed;
+  color: var(--glitch-green);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px 0;
+}
+
+/* MATRIX CANVAS - Background layer */
+#canvas-matrix {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 1;
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+/* CRT SCANLINE EFFECT */
+body::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
+              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 100;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+
+/* LOGO */
+.logo-container {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  z-index: 10;
+  margin-bottom: 10px;
+  perspective: 1000px;
+}
+
+.logo-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  filter: drop-shadow(0 0 5px var(--glitch-green)) drop-shadow(0 0 15px var(--glitch-green));
+  animation: racing-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes racing-glow {
+  0% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 5px var(--glitch-green)); }
+  100% { transform: scale(1.02); filter: brightness(1.3) drop-shadow(0 0 20px var(--glitch-green)); }
+}
+
+/* CENTER CONTAINER */
+.container {
+  max-width: 750px;
+  width: 92%;
+  position: relative;
+  z-index: 10;
+  margin-bottom: 60px;
+  animation: fadeIn 0.8s ease-out;
+}
+
+/* SECTIONS */
+.section {
+  margin-bottom: 25px;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 255, 65, 0.3);
+  border-radius: 4px;
+}
+
+.section h2 {
+  margin-top: 0;
+  font-size: 16px;
+  color: #fff;
+  text-transform: uppercase;
+  border-bottom: 1px dashed var(--glitch-green);
+  padding-bottom: 5px;
+  text-shadow: 0 0 5px var(--glitch-green);
+}
+
+.section p {
+  line-height: 1.6;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.highlight {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid var(--glitch-green);
+  background: rgba(0, 255, 65, 0.1);
+}
+
+.container::before, .container::after {
+  content: "";
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--glitch-green);
+  z-index: 11;
+}
+.container::before { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
+.container::after { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
+
+h1 {
+  text-align: center;
+  font-size: 26px;
+  letter-spacing: 3px;
+  color: #fff;
+  text-shadow: 0 0 15px var(--glitch-green);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 12px;
+  opacity: .8;
+  margin-bottom: 30px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.back-btn {
+  display: inline-block;
+  margin-top: 15px;
+  padding: 15px 30px;
+  font-size: 13px;
+  background: rgba(0, 255, 65, 0.15);
+  color: var(--glitch-green);
+  text-decoration: none;
+  border: 1px solid var(--glitch-green);
+  text-transform: uppercase;
+  font-weight: bold;
+  cursor: pointer !important;
+  transition: 0.3s;
+  border-radius: 4px;
+}
+
+.back-btn:hover {
+  background: var(--glitch-green);
+  color: var(--dark-void);
+  box-shadow: 0 0 25px var(--glitch-green);
+}
+
+.footer {
+  text-align: center;
+  margin-top: 30px;
+  font-size: 10px;
+  opacity: .5;
+  letter-spacing: 1px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 480px) {
+  .container { padding: 10px; }
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas-matrix"></canvas>
+
+<div class="logo-container">
+  <img src="/mylogo.png" alt="MYRQAI LOGO">
+</div>
+
+<div class="container">
+  <h1>📜 TERMS_OF_SERVICE</h1>
+  <div class="subtitle">Protocol Rules for Secure Nodes.</div>
+
+  <div class="section">
+    <h2>0x01: Acceptance of Terms</h2>
+    <p>By establishing a connection to MYRQAI, you acknowledge and agree to these Terms of Service. If you do not agree, terminate your session immediately.</p>
+  </div>
+
+  <div class="section">
+    <h2>0x02: Responsible Use</h2>
+    <p>Users shall not utilize MYRQAI for unlawful activities, harassment, or harmful conduct. The service is intended for legitimate privacy preservation.</p>
+    <span class="highlight">NO_ILLEGAL_USE // NO_HARASSMENT</span>
+  </div>
+
+  <div class="section">
+    <h2>0x03: Message Lifecycle</h2>
+    <p>Payloads are volatile. They self-destruct after initial decryption or 24 hours (whichever comes first). The system is not liable for purged data.</p>
+    <span class="highlight">READ_ONCE // AUTO_PURGE // 24H_TIMER</span>
+  </div>
+
+  <div class="section">
+    <h2>0x04: Service Uptime</h2>
+    <p>The administration reserves the right to suspend or update the service without prior notification to maintain network integrity.</p>
+  </div>
+
+  <div class="section">
+    <h2>0x05: Limitation of Liability</h2>
+    <p>MYRQAI is provided "AS IS". We maintain zero logs; therefore, we cannot recover data or verify transmissions for any legal disputes.</p>
+  </div>
+
+  <div style="text-align:center;">
+    <a href="index.html" class="back-btn">[ RETURN_TO_BASE ]</a>
+  </div>
+
+  <div class="footer">
+    © 2026 MYRQAI // DISCREET_ENCRYPTION_LAYER // BUILD_1.04
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas-matrix');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
+
+const chars = "0101010101ABCDEFGHJKLMNOPQRSTUVWXYZ$#@%";
+const fontSize = 16;
+const columns = Math.floor(canvas.width / fontSize);
+const drops = Array(columns).fill(1);
+
+function draw() {
+  ctx.fillStyle = "rgba(2, 6, 23, 0.1)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#00ff41";
+  ctx.font = fontSize + "px monospace";
+  drops.forEach((y, i) => {
+    const text = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(text, i * fontSize, y * fontSize);
+    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}
+setInterval(draw, 35);
+</script>
+
+</body>
+</html>

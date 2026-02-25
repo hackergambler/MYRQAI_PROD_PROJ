@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MYRQAI — Invisible Messages & AI Personality Scanner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+:root {
+  --glitch-green: #00ff41;
+  --dark-void: #020617;
+  --neon-red: #ff003c;
+  --neon-blue: #38bdf8;
+}
+
+body {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  background: radial-gradient(circle at center, #0a0f25 0%, var(--dark-void) 100%);
+  background-attachment: fixed;
+  color: var(--glitch-green);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  padding: 20px 0;
+}
+
+#canvas-matrix {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 1;
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.logo-container {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  z-index: 10;
+  margin-bottom: 10px;
+}
+
+.logo-container img {
+  width: 100%;
+  filter: drop-shadow(0 0 5px var(--glitch-green)) drop-shadow(0 0 20px var(--glitch-green));
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from { filter: drop-shadow(0 0 5px var(--glitch-green)); }
+  to { filter: drop-shadow(0 0 30px var(--glitch-green)); }
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 25px;
+  z-index: 10;
+}
+
+.hero h1 {
+  font-size: 26px;
+  letter-spacing: 4px;
+  color: #fff;
+  text-shadow: 0 0 15px var(--glitch-green);
+  margin-bottom: 8px;
+}
+
+.hero p {
+  font-size: 13px;
+  opacity: .85;
+  color: var(--neon-blue);
+  letter-spacing: 1px;
+}
+
+.box {
+  background: rgba(2,6,23,.85);
+  padding: 35px;
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  border-radius: 6px;
+  width: 92%;
+  max-width: 520px;
+  z-index: 10;
+  text-align: center;
+  margin-bottom: 50px;
+  box-shadow: 0 0 25px rgba(0,255,65,.15);
+}
+
+button {
+  width: 100%; padding: 16px; margin-top: 15px;
+  border: 1px solid var(--glitch-green);
+  background: rgba(2, 6, 23, 0.9);
+  color: var(--glitch-green);
+  font-family: inherit;
+  font-weight: bold;
+  letter-spacing: 2px;
+  cursor: crosshair;
+  transition: .2s;
+}
+
+button:hover {
+  background: var(--glitch-green);
+  color: var(--dark-void);
+  box-shadow: 0 0 30px var(--glitch-green);
+}
+
+.persona {
+  display: block;
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--neon-blue);
+  background: rgba(56,189,248,.05);
+  color: var(--neon-blue);
+  text-decoration: none;
+  transition: .3s;
+}
+
+.persona:hover {
+  background: rgba(56,189,248,.15);
+  box-shadow: 0 0 20px rgba(56,189,248,.6);
+  transform: scale(1.03);
+}
+
+.pro-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:14px;
+}
+
+.pro-btn{
+  padding:14px;
+  border:1px solid var(--glitch-green);
+  background:rgba(2,6,23,.9);
+  color:var(--glitch-green);
+  cursor:pointer;
+  font-weight:bold;
+}
+
+.pro-btn:hover{
+  background:var(--glitch-green);
+  color:#020617;
+}
+
+.main-title {
+  font-size: 16px; 
+  letter-spacing: 3px; 
+  font-weight: bold; 
+  color: #fff; 
+  text-shadow: 0 0 10px var(--glitch-green); 
+  margin-bottom: 20px;
+  animation: flicker 4s infinite;
+}
+
+@keyframes flicker {
+  0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; }
+  20%, 24%, 55% { opacity: 0.3; }
+}
+/* ===== ULTRA PREMIUM STEALTH MODE ===== */
+.ghost-module{
+  position:relative;
+  display:block;
+  margin-top:30px;
+  padding:30px;
+  text-decoration:none;
+  border-radius:14px;
+  overflow:hidden;
+  background:linear-gradient(145deg, rgba(255,0,60,.10), rgba(10,15,37,.9));
+  border:1px solid rgba(255,0,60,.6);
+  color:#fff;
+  transition:all .45s cubic-bezier(.2,.8,.2,1);
+  box-shadow:
+    0 0 15px rgba(255,0,60,.3),
+    inset 0 0 20px rgba(255,0,60,.08);
+}
+
+.ghost-module::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  padding:1px;
+  border-radius:14px;
+  background:linear-gradient(120deg, transparent, #ff003c, transparent);
+  -webkit-mask:
+     linear-gradient(#000 0 0) content-box,
+     linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:stealth-border 4s linear infinite;
+}
+
+@keyframes stealth-border{
+  0%{background-position:-200% 0;}
+  100%{background-position:200% 0;}
+}
+
+.ghost-module::after{
+  content:"";
+  position:absolute;
+  top:0;
+  left:-100%;
+  width:100%;
+  height:100%;
+  background:linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,0,60,.15),
+    transparent
+  );
+  animation:stealth-scan 3s infinite;
+}
+
+@keyframes stealth-scan{
+  0%{left:-100%;}
+  100%{left:100%;}
+}
+
+.ghost-module:hover{
+  transform:translateY(-6px) scale(1.03);
+  box-shadow:
+    0 0 35px rgba(255,0,60,.9),
+    inset 0 0 35px rgba(255,0,60,.15);
+}
+
+.ghost-title{
+  font-size:18px;
+  font-weight:bold;
+  letter-spacing:2px;
+  color:#ff003c;
+  text-shadow:0 0 12px rgba(255,0,60,.9);
+  margin-bottom:10px;
+}
+
+.ghost-desc{
+  font-size:13px;
+  line-height:1.6;
+  opacity:.9;
+  letter-spacing:1px;
+  color:#ffccd5;
+}
+
+.footer {
+  margin-top: 35px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(0,255,65,.2);
+  font-size: 11px;
+}
+.footer a {
+  color: var(--glitch-green);
+  margin: 0 8px;
+  text-decoration: none;
+  opacity: .7;
+}
+.footer a:hover { opacity: 1; }
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas-matrix"></canvas>
+
+<div class="logo-container">
+  <img src="/mylogo.png" alt="MYRQAI">
+</div>
+
+<div class="main-title">
+    [ SHADOW_MESSAGE_VAULT ]
+</div>
+<div class="hero">
+  <p>Invisible Messaging • AI Persona • Future Prediction • Zero Storage</p>
+</div>
+
+<div class="box">
+
+  <button onclick="location.href='send.html'">ENCRYPT SECRET MESSAGE</button>
+  <button onclick="location.href='unlock.html'">DECRYPT SECRET MESSAGE</button>
+
+  <a href="persona.html" class="persona">
+    <h3>🧠 AI PERSONA SCANNER</h3>
+    <p>Username → Personality AI decoding</p>
+  </a>
+
+  <div class="pro-grid">
+    <button class="pro-btn" onclick="location.href='persona-pro.html'">⚡ PERSONA PRO</button>
+    <button class="pro-btn" onclick="location.href='future.html'">🔮 FUTURE AI</button>
+  </div>
+
+  <a href="stealth.html" class="ghost-module">
+    <div class="ghost-title">
+      🕵️ STEALTH MODE — IMAGE STEGANOGRAPHY
+    </div>
+    <div class="ghost-desc">
+      Military-grade AES encryption hidden inside PNG images.<br>
+      Invisible transmission layer. Zero logs. Undetectable payload.
+    </div>
+  </a>
+
+  <div class="footer">
+    <a href="admin-login.html">ADMIN</a> |
+    <a href="privacy.html">PRIVACY</a> |
+    <a href="terms.html">TERMS</a>
+    <div style="margin-top:8px;opacity:.5;letter-spacing:2px">
+      ZERO_STORAGE // ZERO_LOGS // MAX_PRIVACY
+    </div>
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('canvas-matrix');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
+
+const chars = "01";
+const fontSize = 16;
+const columns = Math.floor(canvas.width / fontSize);
+const drops = Array(columns).fill(1);
+
+function draw() {
+  ctx.fillStyle = "rgba(2,6,23,.08)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = "#00ff41";
+  ctx.font = fontSize+"px monospace";
+
+  drops.forEach((y,i)=>{
+    const text = chars[Math.floor(Math.random()*chars.length)];
+    ctx.fillText(text,i*fontSize,y*fontSize);
+    if(y*fontSize>canvas.height && Math.random()>0.975) drops[i]=0;
+    drops[i]++;
+  })
+}
+setInterval(draw,35);
+</script>
+
+</body>
+</html>

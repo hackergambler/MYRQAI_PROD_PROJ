@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TERMINAL — ADMIN_ACCESS</title>
+  <script async 
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8668540803235423"
+    crossorigin="anonymous">
+  </script>
+
+  <style>
+    /* === ADVANCED HACKER UI VARIABLES === */
+    :root {
+      --glitch-green: #00ff41;
+      --dark-void: #020617;
+      --terminal-bg: transparent; 
+    }
+
+    * { box-sizing: border-box; cursor: crosshair; }
+
+    body {
+      margin: 0;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      /* Racing Clouds Effect */
+      background: radial-gradient(circle at center, #0a1128 0%, var(--dark-void) 100%);
+      background-attachment: fixed;
+      color: var(--glitch-green);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 20px 0;
+    }
+
+    /* CODE RAIN CANVAS */
+    #canvas-matrix {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      opacity: 0.15;
+      pointer-events: none;
+    }
+
+    /* LOGO: Racing Car Glow Effect */
+    .logo-container {
+      width: 100%;
+      max-width: 320px; /* Slightly smaller for login page focus */
+      text-align: center;
+      z-index: 10;
+      margin-bottom: 20px;
+      perspective: 1000px;
+    }
+
+    .logo-container img {
+      width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      filter: drop-shadow(0 0 5px var(--glitch-green)) drop-shadow(0 0 15px var(--glitch-green));
+      animation: racing-glow 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes racing-glow {
+      0% {
+        filter: drop-shadow(0 0 5px var(--glitch-green)) drop-shadow(0 0 10px var(--glitch-green)) brightness(1);
+        transform: scale(1) translateZ(0);
+      }
+      100% {
+        filter: drop-shadow(0 0 10px var(--glitch-green)) drop-shadow(0 0 25px var(--glitch-green)) drop-shadow(0 0 40px rgba(0, 255, 65, 0.4)) brightness(1.5);
+        transform: scale(1.02) translateZ(20px);
+      }
+    }
+
+    /* THE PROPER HACKER FRAME */
+    .box {
+      background: rgba(2, 6, 23, 0.4);
+      padding: 40px;
+      border: 1px solid rgba(0, 255, 65, 0.15);
+      border-radius: 4px;
+      width: 92%;
+      max-width: 400px;
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      backdrop-filter: blur(5px);
+    }
+
+    /* CORNER BRACKETS */
+    .box::before, .box::after, .corner-accent::before, .corner-accent::after {
+      content: ""; position: absolute; width: 40px; height: 40px; border: 3px solid var(--glitch-green); z-index: 11; animation: bracket-glow 4s ease-in-out infinite;
+    }
+    .box::before { top: -10px; left: -10px; border-right: 0; border-bottom: 0; }
+    .box::after { bottom: -10px; right: -10px; border-left: 0; border-top: 0; }
+    .corner-accent::before { top: -10px; right: -10px; border-left: 0; border-bottom: 0; }
+    .corner-accent::after { bottom: -10px; left: -10px; border-right: 0; border-top: 0; }
+
+    @keyframes bracket-glow {
+      0%, 100% { filter: drop-shadow(0 0 2px var(--glitch-green)); opacity: 0.3; }
+      50% { filter: drop-shadow(0 0 12px var(--glitch-green)); opacity: 1; }
+    }
+
+    h2 { 
+      font-size: 1.2rem; 
+      text-transform: uppercase; 
+      letter-spacing: 4px; 
+      margin-bottom: 25px; 
+      color: #fff; 
+      text-shadow: 0 0 10px var(--glitch-green); 
+    }
+
+    /* INPUTS */
+    input {
+      width: 100%;
+      padding: 15px;
+      margin-top: 10px;
+      border: 1px solid var(--glitch-green);
+      background: rgba(2, 6, 23, 0.9);
+      color: var(--glitch-green);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      border-radius: 4px;
+      text-align: center;
+      letter-spacing: 2px;
+      transition: 0.3s;
+    }
+
+    input:focus {
+      background: rgba(0, 255, 65, 0.1);
+      box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+      border-color: #fff;
+    }
+
+    /* BUTTONS */
+    button {
+      width: 100%;
+      padding: 16px;
+      margin-top: 20px;
+      border: 1px solid var(--glitch-green);
+      background: rgba(0, 255, 65, 0.1);
+      color: var(--glitch-green);
+      font-weight: bold;
+      font-family: inherit;
+      text-transform: uppercase;
+      cursor: pointer !important;
+      transition: 0.3s;
+      border-radius: 4px;
+      letter-spacing: 2px;
+    }
+
+    button:hover {
+      background: var(--glitch-green);
+      color: var(--dark-void);
+      box-shadow: 0 0 30px var(--glitch-green);
+    }
+
+    #msg {
+      margin-top: 20px;
+      min-height: 20px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .loading-text { color: var(--glitch-green); animation: pulse 1.5s infinite; }
+    .error-text { color: #ff003c; text-shadow: 0 0 10px #ff003c; font-weight: bold; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+</head>
+
+<body>
+
+<canvas id="canvas-matrix"></canvas>
+
+<div class="logo-container">
+  <img src="/mylogo.png" alt="MYRQAI LOGO">
+</div>
+
+<div class="box">
+  <div class="corner-accent"></div>
+  <h2>[ ADMIN_LOGIN ]</h2>
+  
+  <input id="secret" placeholder="ENTER_ADMIN_SECRET" type="password">
+  <button onclick="login()">>> AUTHENTICATE</button>
+  
+  <div id="msg"></div>
+</div>
+
+<script>
+/* MATRIX BACKGROUND LOGIC */
+const canvas = document.getElementById('canvas-matrix');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
+
+const chars = "0101010101ABCDEFGHJKLMNOPQRSTUVWXYZ$#@%";
+const fontSize = 16;
+const columns = Math.floor(canvas.width / fontSize);
+const drops = Array(columns).fill(1);
+
+function draw() {
+  ctx.fillStyle = "rgba(2, 6, 23, 0.1)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#00ff41";
+  ctx.font = fontSize + "px monospace";
+  drops.forEach((y, i) => {
+    const text = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(text, i * fontSize, y * fontSize);
+    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}
+setInterval(draw, 35);
+
+/* LOGIN LOGIC */
+const API = "https://myrqai-prod.tibco-tibco-8.workers.dev";
+
+async function login() {
+  const secret = document.getElementById("secret").value.trim();
+  const msg = document.getElementById("msg");
+
+  if(!secret) return;
+
+  msg.className = "loading-text";
+  msg.innerText = "> CHECKING_CREDENTIALS...";
+
+  try {
+    const r = await fetch(`${API}/api/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret })
+    });
+
+    const j = await r.json();
+
+    // RESTORED LOGIC: Validates success and stores token locally
+    if (j.success) {
+      localStorage.setItem("admin_token", secret);
+      msg.className = "loading-text";
+      msg.innerText = ">> ACCESS_GRANTED. REDIRECTING...";
+      setTimeout(() => {
+        location.href = "admin-dashboard.html";
+      }, 1000);
+    } else {
+      msg.className = "error-text";
+      msg.innerText = "❌ ACCESS_DENIED: INVALID_SECRET";
+    }
+
+  } catch (e) {
+    msg.className = "error-text";
+    msg.innerText = "⚠ CRITICAL_ERROR: UPLINK_FAILURE";
+  }
+}
+
+// Enter key support for input field
+document.getElementById("secret").addEventListener("keypress", function(event) {
+  if (event.key === "Enter") {
+    login();
+  }
+});
+</script>
+
+</body>
+</html>

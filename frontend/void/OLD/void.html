@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Signal Detected</title>
+<link rel="icon" href="data:,">
+
+<style>
+body{
+  margin:0;
+  background:black;
+  color:#00ff9c;
+  font-family:monospace;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:100vh;
+  overflow:hidden;
+}
+
+.void-box{
+  text-align:center;
+  max-width:600px;
+  position:relative;
+  z-index:2;
+  background: #050505;
+  padding: 2rem;
+  font-family: 'Courier New', Courier, monospace;
+  min-height: 300px;
+  overflow-y: auto;
+}
+
+.void-hint-box {
+  color: #00ff9f;
+  border-left: 3px solid #00ff9f;
+  background: rgba(0, 255, 159, 0.05);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  text-shadow: 0 0 5px #00ff9f;
+  animation: void-glitch 0.3s ease-in-out;
+}
+
+/* Deep Vault Style */
+.void-hint-box.deep-layer {
+  color: #ff00ff;
+  border-left-color: #ff00ff;
+  background: rgba(255, 0, 255, 0.05);
+  text-shadow: 0 0 8px #ff00ff;
+}
+
+.system-msg {
+  border-left-style: dashed;
+  opacity: 0.8;
+}
+
+@keyframes void-glitch {
+  0% { transform: skew(5deg); opacity: 0; }
+  50% { transform: skew(-5deg); opacity: 1; }
+  100% { transform: skew(0); }
+}
+
+.title{
+  font-size:22px;
+  margin-bottom:10px;
+  letter-spacing:2px;
+}
+
+.subtitle{
+  opacity:0.5;
+  margin-bottom:25px;
+}
+
+input{
+  background:black;
+  border:1px solid #00ff9c;
+  color:#00ff9c;
+  padding:12px;
+  width:280px;
+  outline:none;
+  text-align:center;
+}
+
+button{
+  margin-top:15px;
+  padding:10px 20px;
+  background:#00ff9c;
+  border:none;
+  cursor:pointer;
+  color:black;
+  font-weight:bold;
+}
+
+#voidCanvas{
+  position:absolute;
+  top:0;
+  left:0;
+  opacity:0.15;
+  z-index:1;
+}
+
+.blink{
+  animation: blink 1.2s infinite;
+}
+
+@keyframes blink{
+  50%{opacity:0.3;}
+}
+</style>
+
+</head>
+
+<body>
+
+<canvas id="voidCanvas"></canvas>
+
+<div class="void-box">
+  <div class="title blink">TRANSMISSION INTERCEPTED</div>
+  <div class="subtitle">Some signals are not meant to be understood.</div>
+
+  <input id="keyInput" placeholder="enter key or decrypt artifact" />
+  <br>
+  <button id="unlockBtn">UNLOCK</button>
+
+  <div id="status" class="subtitle"></div>
+</div>
+
+<!-- FAKE HINT -->
+
+<div id="fake-hint" style="display:none; position:absolute; bottom:20px; opacity:0.35; font-size:12px;">
+🜏 Hint: The secret lies in EXIF metadata
+</div>
+
+<script type="module">
+
+import { loadImageVault, fakeLayer } from "./image-vault.js";
+import { parseVault, unlockHintByKey } from "./vault-engine.js";
+
+let vaultReady = false;
+
+/* ===============================
+   LOAD IMAGE + CANVAS ILLUSION
+================================ */
+
+const canvas = document.getElementById("voidCanvas");
+const img = new Image();
+
+img.onload = ()=>{
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img,0,0);
+
+  if(fakeLayer){
+    fakeLayer(canvas);
+  }
+}
+
+img.src = "./assets/encode.png";
+
+/* ===============================
+   LOAD VAULT
+================================ */
+
+(async ()=>{
+  const vault = await loadImageVault("./assets/encode.png");
+
+  if(vault){
+    parseVault(vault);
+    vaultReady = true;
+    setStatus("signal ready");
+  }else{
+    setStatus("");
+  }
+})();
+
+/* ===============================
+   INPUT UNLOCK
+================================ */
+
+document.getElementById("unlockBtn").onclick = ()=>{
+  if(!vaultReady) return;
+
+  const key = document.getElementById("keyInput").value.trim();
+  unlockHintByKey(key);
+};
+
+document.getElementById("keyInput").addEventListener("keypress", e=>{
+  if(e.key === "Enter"){
+    document.getElementById("unlockBtn").click();
+  }
+});
+
+function setStatus(msg){
+  document.getElementById("status").innerText = msg;
+}
+
+/* ===============================
+   FAKE DEV HINT DELAY
+================================ */
+
+setTimeout(()=>{
+  document.getElementById("fake-hint").style.display="block";
+}, 6000);
+
+/* ===============================
+   BEHAVIOR TRIGGERS
+================================ */
+
+let slowMoveTimer = null;
+
+document.addEventListener("mousemove", ()=>{
+  if(slowMoveTimer) return;
+
+  slowMoveTimer = setTimeout(()=>{
+    unlockHintByKey("observer");
+  }, 7000);
+});
+
+let idleTimer;
+
+function resetIdle(){
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(()=>{
+    unlockHintByKey("silence");
+  }, 12000);
+}
+
+["mousemove","keydown","click","scroll"].forEach(evt=>{
+  document.addEventListener(evt, resetIdle);
+});
+
+resetIdle();
+
+let clickCount = 0;
+
+document.addEventListener("click", ()=>{
+  clickCount++;
+  setTimeout(()=> clickCount = 0, 1200);
+
+  if(clickCount === 3){
+    unlockHintByKey("pattern");
+  }
+});
+
+const hour = new Date().getHours();
+
+if(hour >= 1 && hour <= 4){
+  setTimeout(()=>{
+    unlockHintByKey("night");
+  }, 4000);
+}
+
+</script>
+
+</body>
+</html>
