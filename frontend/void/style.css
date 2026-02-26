@@ -1,9 +1,11 @@
 /* =========================================================
-   MYRQAI VOID VAULT — CLEAN HIGH-END HACKER CSS (FINAL FIX)
-   - Left signal list scrolls (100+ signals) without pushing layout down
-   - Page scrollbar works (body scroll allowed)
-   - Sticky topbar + fixed-height main shell
-   - Works with: #matrix .vignette .scanlines .topbar .shell .side .panel
+   MYRQAI VOID VAULT — GLASS TRANSPARENT FRAMES + RADIANT BACKGROUND (PROPER FIX)
+   Fixes applied:
+   ✅ Background image truly visible (stronger, radiant, behind all layers)
+   ✅ Frames more transparent (glass) so background shows through
+   ✅ Terminal space increased (panel flex rules + mission capped + terminal min-height)
+   ✅ No functionality break (same class names, same layout logic)
+   ✅ No z-index fights (background below matrix/vignette/scanlines/shell)
    ========================================================= */
 
 :root{
@@ -18,66 +20,124 @@
   --line: rgba(0,255,156,.14);
   --line2: rgba(0,255,156,.22);
 
-  --panel: rgba(0,0,0,.50);
-  --panel2: rgba(0,0,0,.82);
+  /* ✅ more transparent glass */
+  --glass: rgba(0,0,0,.10);
+  --glass2: rgba(0,0,0,.18);
 
   --shadow: 0 18px 40px rgba(0,0,0,.55);
   --radius: 22px;
 
-  /* Layout knobs */
   --container: 1220px;
   --gap: 18px;
   --pad: 18px;
-  --topbar-h: 72px; /* used for calc; sticky header is ~72px */
+  --topbar-h: 72px;
+
+  /* ✅ background image support (set by JS: --bg-image: url("...")) */
+  --bg-image: none;
+
+  /* ✅ make BG actually visible */
+  --bg-opacity: .34;     /* was .18 (too faint under vignette/matrix) */
+  --bg-blur: 0px;
+  --bg-scale: 1.07;
+
+  /* ✅ radiant glow strength */
+  --bg-glow-a: .22;
+  --bg-glow-b: .14;
 }
 
 *{ box-sizing:border-box; }
-
-html, body{
-  height: auto;
-  min-height: 100%;
-}
+html, body{ height:100%; }
 
 body{
-  margin: 0;
+  margin:0;
   color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  overflow-x:hidden;
+  overflow-y:auto;
+  min-height:100vh;
+  min-height:100dvh;
 
-  overflow-x: hidden;
-  overflow-y: auto;
-
+  /* keep base gradients light so BG image can show */
   background:
-    radial-gradient(1200px 600px at 30% 10%, rgba(0,255,156,.10), transparent 60%),
-    radial-gradient(900px 500px at 80% 80%, rgba(0,120,255,.08), transparent 55%),
+    radial-gradient(1200px 600px at 30% 10%, rgba(0,255,156,.08), transparent 60%),
+    radial-gradient(900px 500px at 80% 80%, rgba(0,120,255,.06), transparent 55%),
     var(--bg);
 
   scrollbar-gutter: stable;
+  position: relative;
 }
 
-/* ===== Background layers ===== */
+/* =========================================================
+   ✅ BACKGROUND IMAGE LAYER (VISIBLE + RADIANT)
+   - JS sets: :root { --bg-image: url("...") } and body.bg-ready
+   ========================================================= */
+body::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  z-index: 0; /* absolute bottom */
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  filter: blur(var(--bg-blur)) saturate(1.18) contrast(1.08);
+  transform: scale(var(--bg-scale));
+  transition: opacity 800ms ease;
+  pointer-events:none;
+}
+body.bg-ready::before{ opacity: var(--bg-opacity); }
+
+/* ✅ radiant color glow sitting above image but still behind everything */
+body::after{
+  content:"";
+  position: fixed;
+  inset:-18%;
+  z-index: 0;
+  background:
+    radial-gradient(55% 45% at 22% 28%, rgba(0,255,156,var(--bg-glow-a)), transparent 60%),
+    radial-gradient(52% 46% at 78% 66%, rgba(0,255,204,var(--bg-glow-b)), transparent 62%),
+    radial-gradient(44% 38% at 70% 18%, rgba(0,120,255,.10), transparent 62%),
+    linear-gradient(180deg, rgba(0,0,0,.40), rgba(0,0,0,.72));
+  opacity: .92;
+  transform: translate3d(0,0,0);
+  pointer-events:none;
+  animation: voidDrift 14s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes voidDrift{
+  0%   { transform: translate3d(-1.2%, -0.8%, 0) scale(1.02); }
+  50%  { transform: translate3d( 1.0%,  0.6%, 0) scale(1.03); }
+  100% { transform: translate3d(-1.2%, -0.8%, 0) scale(1.02); }
+}
+
+/* Background layers */
 #matrix{
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
   z-index: 0;
-  opacity: .55;
+  opacity: .50; /* slightly lower so BG is visible */
   pointer-events: none;
 }
-
 .vignette{
-  position: fixed;
-  inset: 0;
+  position: fixed; inset:0;
   z-index: 1;
-  pointer-events: none;
-  background: radial-gradient(circle at 50% 35%, rgba(0,0,0,0) 0%, rgba(0,0,0,.75) 72%, rgba(0,0,0,.92) 100%);
+  pointer-events:none;
+  /* lighten vignette a bit so BG shows */
+  background: radial-gradient(
+    circle at 50% 35%,
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,.62) 72%,
+    rgba(0,0,0,.82) 100%
+  );
 }
-
 .scanlines{
-  position: fixed;
-  inset: 0;
+  position: fixed; inset:0;
   z-index: 2;
-  pointer-events: none;
+  pointer-events:none;
   background: repeating-linear-gradient(
     to bottom,
     rgba(255,255,255,.035) 0px,
@@ -86,78 +146,81 @@ body{
     rgba(0,0,0,0) 6px
   );
   mix-blend-mode: overlay;
-  opacity: .22;
+  opacity: .20;
+  animation: scanDrift 6s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
-/* Tiny CSS whisper */
-:root{ --ghost-word: "ECHO"; }
-.scanlines::after{
-  content: var(--ghost-word);
-  position: fixed;
-  inset: 0;
-  opacity: 0.01;
-  pointer-events:none;
+@keyframes scanDrift{
+  0%   { transform: translate3d(0, -6px, 0); opacity: .50; }
+  50%  { transform: translate3d(0,  6px, 0); opacity: .68; }
+  100% { transform: translate3d(0, -6px, 0); opacity: .50; }
 }
 
-/* ===== Top Bar ===== */
+/* Top bar */
 .topbar{
   position: sticky;
-  top: 0;
+  top:0;
   z-index: 30;
-
   display:flex;
   align-items:center;
   justify-content: space-between;
   gap: 16px;
-
   padding-left: max(18px, calc((100vw - var(--container))/2 + 18px));
   padding-right: max(18px, calc((100vw - var(--container))/2 + 18px));
   padding-top: 16px;
   padding-bottom: 16px;
-
   border-bottom: 1px solid var(--line);
-  background: rgba(0,0,0,.45);
-  backdrop-filter: blur(10px);
+
+  /* more transparent */
+  background: rgba(0,0,0,.18);
+  backdrop-filter: blur(12px);
 }
 
-.brand{ display:flex; align-items:center; gap: 12px; }
+.brand{ display:flex; align-items:center; gap:12px; }
 .logo{
   display:grid; place-items:center;
   width: 38px; height: 38px;
   border-radius: 12px;
   border: 1px solid var(--line2);
   background: rgba(0,255,156,.06);
-  box-shadow: 0 0 22px rgba(0,255,156,.12);
+  box-shadow: 0 0 22px rgba(0,255,156,.16);
   font-size: 18px;
 }
 .brand-title{ font-weight: 900; letter-spacing: .16em; font-size: 12px; color: rgba(0,255,156,.95); }
 .brand-sub{ font-size: 11px; letter-spacing: .10em; color: var(--muted); margin-top: 3px; }
 
-.top-actions{ display:flex; align-items:center; gap: 10px; flex-wrap: wrap; justify-content:flex-end; }
+.top-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
 .chip{
   border:1px solid rgba(0,255,156,.18);
-  background: rgba(0,0,0,.35);
+  background: rgba(0,0,0,.14); /* more transparent */
+  backdrop-filter: blur(10px);
   color: rgba(225,255,245,.92);
   padding: 10px 12px;
   border-radius: 14px;
   letter-spacing: .10em;
-  font-weight: 800;
+  font-weight: 900;
   cursor:pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
 }
-.chip:hover{ background: rgba(0,255,156,.06); transform: translateY(-1px); }
+.chip:hover{
+  background: rgba(0,255,156,.06);
+  border-color: rgba(0,255,156,.34);
+  transform: translateY(-1px);
+}
 
 /* Dropdown */
-.menu{ position: relative; }
+.menu{ position:relative; }
 .menu-drop{
-  display: none;
-  position: absolute;
-  right: 0;
+  display:none;
+  position:absolute;
+  right:0;
   top: calc(100% + 8px);
   min-width: 220px;
   border-radius: 16px;
   border: 1px solid rgba(0,255,156,.16);
-  background: rgba(0,0,0,.82);
-  backdrop-filter: blur(10px);
+  background: rgba(0,0,0,.42);
+  backdrop-filter: blur(14px);
   padding: 10px;
   z-index: 60;
   box-shadow: 0 10px 30px rgba(0,0,0,.55);
@@ -167,7 +230,7 @@ body{
   width: 100%;
   text-align:left;
   border: 1px solid rgba(0,255,156,.12);
-  background: rgba(0,0,0,.35);
+  background: rgba(0,0,0,.14);
   color: rgba(225,255,245,.90);
   padding: 10px 12px;
   border-radius: 12px;
@@ -176,66 +239,53 @@ body{
 }
 .menu-item:hover{ background: rgba(0,255,156,.06); }
 
-/* ===== Main layout ===== */
+/* Layout */
 .shell{
   position: relative;
   z-index: 10;
-
-  display: grid;
-  grid-template-columns: 380px minmax(0, 1fr);
+  display:grid;
+  grid-template-columns: 380px minmax(0,1fr);
   gap: var(--gap);
-
   padding: var(--pad);
   max-width: var(--container);
   margin: 0 auto;
+  min-height: calc(100dvh - var(--topbar-h) - 2px);
+  align-items:start;
 
-  /* Keep stable height under sticky topbar */
-  min-height: calc(100vh - var(--topbar-h) - 2px);
-  align-items: start;
+  animation: shellBoot 520ms ease-out both;
+}
+@keyframes shellBoot{
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: translate3d(0,  0px, 0); }
 }
 
-/* Panels look */
-.side-card, .panel{
+/* ✅ Transparent glass frames (more transparent, still readable) */
+.side-card, .panel, .terminal-frame{
   border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--panel);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0,255,156,.14);
+  background: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.08));
+  backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
 }
 
-/* ===== LEFT COLUMN (IMPORTANT FIX) =====
-   Make the left column a fixed-height stack,
-   and ONLY the signals list scrolls.
-*/
+/* LEFT */
 .side{
   display:flex;
   flex-direction:column;
   gap: 14px;
-
-  /* lock the column height to viewport under topbar */
-  height: calc(100vh - var(--topbar-h) - (var(--pad) * 2));
+  height: calc(100dvh - var(--topbar-h) - (var(--pad) * 2));
   min-height: 540px;
-
-  /* prevent contents from forcing page scroll */
-  overflow: hidden;
+  overflow:hidden;
 }
-
-/* first side card grows, second stays natural size */
-.side-card{
-  padding: 16px;
-  min-width: 0;
-}
+.side-card{ padding: 16px; min-width:0; }
 .side-card:first-child{
   flex: 1;
   display:flex;
   flex-direction:column;
-  min-height: 0; /* critical to allow inner scrolling */
+  min-height:0;
 }
-.side-card:last-child{
-  flex: 0 0 auto;
-}
+.side-card:last-child{ flex:0 0 auto; }
 
-/* Titles / text */
 .side-title{
   font-weight: 900;
   letter-spacing: .14em;
@@ -243,7 +293,12 @@ body{
   color: rgba(0,255,156,.92);
   text-transform: uppercase;
 }
-.side-text{ margin-top: 10px; font-size: 12px; line-height: 1.6; color: rgba(225,255,245,.72); }
+.side-text{
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(225,255,245,.72);
+}
 .muted{ color: rgba(225,255,245,.55); }
 .tiny{ font-size: 11px; }
 
@@ -252,8 +307,9 @@ body{
   margin-top: 12px;
   padding: 12px;
   border-radius: 16px;
-  border:1px solid rgba(0,255,156,.12);
-  background: rgba(0,0,0,.28);
+  border:1px solid rgba(0,255,156,.14);
+  background: rgba(0,0,0,.12); /* more transparent */
+  backdrop-filter: blur(10px);
 }
 .meter-head{ display:flex; align-items:center; justify-content:space-between; }
 .meter-title{ font-weight:900; letter-spacing:.14em; font-size:12px; color: rgba(0,255,156,.92); }
@@ -269,7 +325,7 @@ body{
 .meter-fill{
   height: 100%;
   width: 0%;
-  background: rgba(0,255,156,.55);
+  background: rgba(0,255,156,.60);
   box-shadow: 0 0 18px rgba(0,255,156,.22) inset;
 }
 .meter-sub{ margin-top:8px; font-size: 11px; color: rgba(225,255,245,.55); line-height:1.4; }
@@ -280,96 +336,97 @@ body{
   border-radius: 8px;
 }
 
-/* Signal Strength Meter */
-.signal-strength{
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 16px;
-  border:1px solid rgba(0,255,156,.12);
-  background: rgba(0,0,0,.28);
-}
-.signal-strength-head{ display:flex; align-items:center; justify-content:space-between; }
-.signal-strength-title{ font-weight:900; letter-spacing:.14em; font-size:12px; color: rgba(0,255,156,.92); }
-.signal-strength-meta{ font-weight:900; color: rgba(225,255,245,.85); }
-.signal-strength-bar{
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(0,255,156,.10);
-  border:1px solid rgba(0,255,156,.14);
-  margin-top:10px;
-  overflow:hidden;
-}
-.signal-strength-fill{
-  height:100%;
-  width: 42%;
-  background: rgba(0,255,156,.55);
-  box-shadow: 0 0 18px rgba(0,255,156,.22) inset;
-  transition: width 0.1s linear;
-}
-
-/* ===== Signal Feed scroll container ===== */
+/* Signals (single slot) */
 .signals{
   display:flex;
   flex-direction:column;
   gap:10px;
   margin-top:12px;
-
-  /* CRITICAL: this is what keeps 100 cards from pushing layout down */
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow:auto;
   padding-right: 6px;
-
-  /* subtle internal border for "panel inside panel" feel */
   border-radius: 16px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.signals.single{
+  overflow: hidden;
+  padding-right: 0;
 }
 
-/* nicer scrollbar in webkit */
+/* scrollbar */
 .signals::-webkit-scrollbar,
-.stream::-webkit-scrollbar{
-  width: 10px;
-}
+.stream::-webkit-scrollbar{ width: 10px; }
 .signals::-webkit-scrollbar-thumb,
 .stream::-webkit-scrollbar-thumb{
-  background: rgba(0,255,156,.18);
-  border: 2px solid rgba(0,0,0,.35);
+  background: rgba(0,255,156,.22);
+  border: 2px solid rgba(0,0,0,.18);
   border-radius: 999px;
 }
 .signals::-webkit-scrollbar-track,
 .stream::-webkit-scrollbar-track{
-  background: rgba(0,0,0,.22);
+  background: rgba(0,0,0,.14);
   border-radius: 999px;
 }
 
-/* Signal cards */
+/* ✅ Fragment frame */
+.fragment-frame{
+  border-radius: 18px;
+  border: 1px solid rgba(0,255,156,.14);
+  background: rgba(0,0,0,.08);
+  padding: 10px;
+  box-shadow: inset 0 0 0 1px rgba(0,255,156,.05);
+}
+
+/* Signal card */
 .signal-card{
   width:100%;
   text-align:left;
   border-radius: 16px;
-  border:1px solid rgba(0,255,156,.16);
-  background: rgba(0,0,0,.45);
-  padding: 12px;
-  color: rgba(225,255,245,.9);
+  border:1px solid rgba(0,255,156,.18);
+  background: rgba(0,0,0,.12);
+  backdrop-filter: blur(12px);
+  padding: 14px;
+  color: rgba(225,255,245,.92);
   cursor:pointer;
-  transition: transform .08s ease, background .15s ease;
+  transition: transform .12s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
-.signal-card:hover{ transform: translateY(-1px); background: rgba(0,255,156,.06); }
-.signal-title{ font-weight: 900; letter-spacing:.10em; color: rgba(0,255,156,.92); margin-bottom:6px; }
+.signal-card:hover{
+  transform: translateY(-2px);
+  background: rgba(0,255,156,.06);
+  border-color: rgba(0,255,156,.36);
+  box-shadow: 0 10px 26px rgba(0,0,0,.30);
+}
+.signal-title{ font-weight: 900; letter-spacing:.10em; color: rgba(0,255,156,.92); margin-bottom:8px; }
 .signal-meta{ font-size: 11px; letter-spacing:.12em; color: rgba(225,255,245,.55); text-transform: uppercase; }
-.signal-desc{ margin-top:8px; font-size: 12px; color: rgba(225,255,245,.72); line-height:1.5; }
+.signal-desc{ margin-top:10px; font-size: 12px; color: rgba(225,255,245,.75); line-height:1.55; }
+.signal-cta{
+  margin-top: 12px;
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: rgba(0,255,156,.88);
+  text-transform: uppercase;
+}
 
-/* ===== CENTER PANEL ===== */
+/* =========================================================
+   ✅ CENTER PANEL + TERMINAL SPACE FIX
+   - Make terminal dominate remaining height
+   - Cap mission box so it can’t steal the viewport
+   ========================================================= */
 .panel{
   padding: 18px;
   min-width: 0;
-
-  /* keep a stable height like the left column */
-  height: calc(100vh - var(--topbar-h) - (var(--pad) * 2));
+  height: calc(100dvh - var(--topbar-h) - (var(--pad) * 2));
   min-height: 540px;
-  overflow: hidden; /* stream scroll handles long text */
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
 }
+/* critical for flex scroll areas */
+.panel > *{ min-height: 0; }
 
-.panel-head{ display:flex; flex-direction:column; gap: 10px; }
+.panel-head{ display:flex; flex-direction:column; gap:10px; flex: 0 0 auto; }
 
 .badge{
   align-self:flex-start;
@@ -383,18 +440,46 @@ body{
   color: rgba(0,255,156,.92);
 }
 
+/* ✅ Radiant animated title */
 .title{
   margin: 0;
   font-size: 34px;
   letter-spacing: .22em;
-  color: rgba(225,255,245,.95);
   text-transform: uppercase;
+  line-height: 1.15;
 }
-.subtitle{
-  margin: 0;
-  font-size: 13px;
-  color: rgba(225,255,245,.70);
-  line-height: 1.6;
+.title.radiant{
+  position: relative;
+  color: rgba(225,255,245,.96);
+  text-shadow:
+    0 0 18px rgba(0,255,156,.22),
+    0 0 42px rgba(0,255,156,.12);
+}
+.title.radiant::after{
+  content:"";
+  position:absolute;
+  inset:-6px -12px;
+  background: radial-gradient(circle at 40% 40%, rgba(0,255,156,.25), transparent 55%),
+              radial-gradient(circle at 70% 60%, rgba(0,120,255,.18), transparent 60%);
+  filter: blur(14px);
+  opacity: .55;
+  z-index: -1;
+  animation: aura 3.6s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes aura{
+  0%,100%{ transform: scale(1); opacity:.45; }
+  50%{ transform: scale(1.03); opacity:.70; }
+}
+
+.title .title-sub{
+  display:block;
+  margin-top:.35rem;
+  font-size:.42em;
+  letter-spacing:.22em;
+  text-transform: uppercase;
+  opacity:.82;
+  color: var(--muted);
 }
 
 /* Glitch */
@@ -430,24 +515,34 @@ body{
   100%{ clip-path: inset(0 0 52% 0); }
 }
 
-/* Mission box */
+.subtitle{
+  margin:0;
+  font-size: 13px;
+  color: rgba(225,255,245,.74);
+  line-height: 1.7;
+}
+
+/* Mission (cap height so terminal grows) */
 .mission{
   margin-top: 10px;
   padding: 14px;
   border-radius: 18px;
   border: 1px dashed rgba(0,255,156,.16);
-  background: rgba(0,0,0,.28);
+  background: rgba(0,0,0,.08);
+  max-height: 170px;
+  overflow:auto;
 }
 .mission-title{ font-weight:900; letter-spacing:.14em; font-size: 12px; color: rgba(0,255,156,.92); }
-.mission-steps{ margin: 10px 0 0 18px; color: rgba(225,255,245,.78); font-size: 12px; line-height: 1.7; }
+.mission-steps{ margin: 10px 0 0 18px; color: rgba(225,255,245,.80); font-size: 12px; line-height: 1.7; }
 
-/* Inputs + buttons */
+/* Controls */
 .controls{
   margin-top: 14px;
   display:flex;
   gap: 12px;
   align-items:stretch;
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 .input-wrap{ flex: 1; min-width: 260px; }
 
@@ -455,7 +550,8 @@ body{
   width: 100%;
   border-radius: 16px;
   border: 1px solid rgba(0,255,156,.18);
-  background: rgba(0,0,0,.40);
+  background: rgba(0,0,0,.12);
+  backdrop-filter: blur(12px);
   color: rgba(225,255,245,.92);
   padding: 14px 14px;
   outline: none;
@@ -464,25 +560,30 @@ body{
   border-color: rgba(0,255,156,.42);
   box-shadow: 0 0 0 4px rgba(0,255,156,.08);
 }
-.hintline{ margin-top: 8px; font-size: 11px; color: rgba(225,255,245,.55); }
 
 .btn{
   border-radius: 16px;
   border: 1px solid rgba(0,255,156,.18);
-  background: rgba(0,0,0,.35);
+  background: rgba(0,0,0,.12);
+  backdrop-filter: blur(12px);
   color: rgba(225,255,245,.92);
   padding: 12px 14px;
   letter-spacing: .10em;
   font-weight: 900;
   cursor:pointer;
   user-select:none;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
 }
-.btn:hover{ background: rgba(0,255,156,.06); transform: translateY(-1px); }
+.btn:hover{
+  background: rgba(0,255,156,.07);
+  border-color: rgba(0,255,156,.36);
+  transform: translateY(-1px);
+}
 .btn.primary{
-  background: linear-gradient(180deg, rgba(0,255,156,.20), rgba(0,0,0,.35));
+  background: linear-gradient(180deg, rgba(0,255,156,.16), rgba(0,0,0,.10));
   border-color: rgba(0,255,156,.28);
 }
-.btn.ghost{ background: rgba(0,0,0,.20); }
+.btn.ghost{ background: rgba(0,0,0,.08); }
 .btn.small{ padding: 10px 12px; border-radius: 14px; }
 
 .dot{
@@ -495,7 +596,7 @@ body{
   vertical-align: middle;
 }
 
-.actions{ margin-top: 10px; display:flex; gap: 10px; flex-wrap:wrap; }
+.actions{ margin-top: 10px; display:flex; gap: 10px; flex-wrap:wrap; flex:0 0 auto; }
 
 .status-row{
   margin-top: 12px;
@@ -503,6 +604,7 @@ body{
   align-items:center;
   justify-content:space-between;
   gap: 12px;
+  flex:0 0 auto;
 }
 .status{ font-size: 12px; color: rgba(225,255,245,.76); min-height: 18px; }
 .live{ display:flex; align-items:center; gap: 8px; font-size: 11px; letter-spacing:.14em; color: rgba(0,255,156,.92); }
@@ -514,37 +616,104 @@ body{
 }
 @keyframes pulse{ 0%,100%{ transform:scale(.85); opacity:.7 } 50%{ transform:scale(1.15); opacity:1 } }
 
-/* Stream (terminal output) — scroll inside panel */
-.stream{
+/* ✅ Terminal frame (bigger + more transparent) */
+.terminal-frame{
   margin-top: 14px;
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;     /* take remaining space */
+  min-height: 360px;  /* prevent tiny terminal */
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
 
-  overflow:auto;
-  padding-right: 6px;
-
-  border-radius: 18px;
-  border: 1px solid rgba(0,255,156,.14);
-  background: rgba(0,0,0,.35);
-  padding: 12px 12px;
-
-  /* ensure it doesn't overflow panel height */
-  max-height: calc(100% - 340px);
+  border: 1px solid rgba(0,255,156,.16);
+  background: rgba(0,0,0,.08);
+}
+.terminal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,255,156,.12);
+  background: rgba(0,0,0,.06);
+}
+.terminal-title{
+  font-weight: 900;
+  letter-spacing: .14em;
+  font-size: 11px;
+  color: rgba(0,255,156,.92);
 }
 
-.hint-card{
+/* NEWEST button */
+.stream-top-btn{
+  display: none;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(0,255,156,.22);
+  background: rgba(0,0,0,.28);
+  color: rgba(225,255,245,.92);
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12px;
+  letter-spacing: .08em;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(0,0,0,.30);
+  backdrop-filter: blur(10px);
+}
+.stream-top-btn:hover{
+  border-color: rgba(0,255,156,.35);
+  background: rgba(0,0,0,.42);
+}
+
+/* Stream */
+.stream{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow:auto;
+  padding: 12px;
+  background: rgba(0,0,0,.05);
+}
+
+/* Stream items */
+.stream-item{
   border-radius: 18px;
   border: 1px solid rgba(0,255,156,.14);
-  background: rgba(0,0,0,.35);
+  background: rgba(0,0,0,.10);
+  backdrop-filter: blur(12px);
   padding: 12px 12px;
   margin-bottom: 10px;
 }
-.hint-card.rare{
+.stream-item.rare{
   border-color: rgba(170, 80, 255, .45);
   box-shadow: 0 0 24px rgba(170, 80, 255, .10);
 }
-.hint-meta{ font-size: 11px; letter-spacing: .14em; color: rgba(225,255,245,.55); margin-bottom: 8px; }
-.hint-text{ white-space: pre-wrap; line-height: 1.6; font-size: 13px; }
+.stream-head{
+  display:flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.stream-title{
+  font-weight: 900;
+  letter-spacing: .12em;
+  color: rgba(0,255,156,.92);
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.stream-meta{
+  font-size: 11px;
+  letter-spacing: .10em;
+  color: rgba(225,255,245,.55);
+  white-space: nowrap;
+}
+.stream-body{
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-size: 13px;
+  color: rgba(225,255,245,.84);
+}
 
 /* Footer */
 .footer{
@@ -567,13 +736,14 @@ body{
   background: rgba(0,0,0,.72);
   padding: 18px;
 }
-.modal.show{ display:flex; }
+.modal.show, .modal.open{ display:flex; }
+
 .modal-card{
   width: min(640px, 96vw);
   border-radius: 22px;
   border: 1px solid rgba(0,255,156,.16);
-  background: rgba(0,0,0,.82);
-  backdrop-filter: blur(10px);
+  background: rgba(0,0,0,.50);
+  backdrop-filter: blur(16px);
   padding: 18px;
   box-shadow: 0 18px 40px rgba(0,0,0,.55);
 }
@@ -581,48 +751,9 @@ body{
 .modal-text{ margin-top: 12px; color: rgba(225,255,245,.76); font-size: 13px; line-height: 1.7; }
 .modal-actions{ margin-top: 14px; display:flex; gap: 10px; justify-content:flex-end; flex-wrap:wrap; }
 
-/* Challenge row */
-.row{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  flex-wrap:wrap;
-  margin-top:10px;
-}
+.row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
 .row .pw{ flex: 1; min-width: 0; }
 
-/* Signal jitter */
-@keyframes jitter {
-  0%{transform:translate(0)}
-  25%{transform:translate(2px,-2px)}
-  50%{transform:translate(-2px,2px)}
-  75%{transform:translate(1px,-1px)}
-  100%{transform:translate(0)}
-}
-body[class*="signal-jitter-"]{ animation:jitter .12s linear infinite; }
-
-/* Manifest overlay */
-.manifest-overlay{
-  position:fixed; inset:0;
-  background:rgba(0,0,0,.85);
-  display:flex; align-items:center; justify-content:center;
-  z-index:9999;
-}
-.manifest-box{
-  background:#001010;
-  border:1px solid #00ff9c;
-  padding:30px;
-  border-radius:12px;
-  text-align:center;
-  color:#00ff9c;
-  font-family:monospace;
-}
-.manifest-box button{
-  margin-top:15px;
-  padding:8px 16px;
-}
-
-/* Accessibility */
 .sr-only{
   position:absolute;
   width:1px;height:1px;
@@ -631,33 +762,103 @@ body[class*="signal-jitter-"]{ animation:jitter .12s linear infinite; }
   white-space:nowrap;border:0;
 }
 
-/* Responsive */
-@media (max-width: 1020px){
-  .shell{
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-  .side{
-    height: auto;
-    overflow: visible;
-  }
-  .panel{
-    height: auto;
-    overflow: visible;
-  }
-  .signals{
-    max-height: 48vh;
-  }
-  .stream{
-    max-height: 52vh;
-  }
+/* shake finite */
+@keyframes jitter {
+  0%{transform:translate(0)}
+  25%{transform:translate(2px,-2px)}
+  50%{transform:translate(-2px,2px)}
+  75%{transform:translate(1px,-1px)}
+  100%{transform:translate(0)}
+}
+body[class*="signal-jitter-"]{ animation:jitter .12s linear 10; }
+
+/* vault hit pulse (from failure engine) */
+body.vault-hit { animation: vaultHit .22s ease-out 1; }
+@keyframes vaultHit {
+  0% { filter: none; }
+  40% { filter: saturate(1.25) contrast(1.15) brightness(1.08); }
+  100% { filter: none; }
+}
+body.vault-hit-2 { animation: vaultHit2 .32s ease-out 1; }
+@keyframes vaultHit2 {
+  0% { filter: none; transform: translateZ(0); }
+  35% { filter: saturate(1.35) contrast(1.2) brightness(1.1); }
+  70% { filter: saturate(1.15) contrast(1.08); }
+  100% { filter: none; }
 }
 
+/* Motion safety */
+@media (prefers-reduced-motion: reduce){
+  body::after{ animation: none !important; }
+  .scanlines{ animation: none !important; }
+  .shell{ animation: none !important; }
+  body[class*="signal-jitter-"]{ animation: none !important; }
+  .glitch::before, .glitch::after{ animation:none !important; }
+  .pulse{ animation:none !important; }
+  .title.radiant::after{ animation:none !important; }
+  body::before{ transition:none !important; }
+}
+
+/* Responsive */
+@media (max-width: 1020px){
+  .shell{ grid-template-columns: 1fr; }
+  .side{ height: auto; min-height: 0; overflow: visible; }
+  .panel{ height: auto; min-height: 0; overflow: visible; }
+  .terminal-frame{ min-height: 56vh; min-height: 56dvh; }
+}
 @media (max-width: 520px){
-  .topbar{
-    padding-left: 14px;
-    padding-right: 14px;
-  }
+  .topbar{ padding-left: 14px; padding-right: 14px; }
   .shell{ padding: 14px; }
   .title{ font-size: 26px; letter-spacing: .18em; }
+  .mission{ max-height: 200px; }
+}
+
+/* ===== CRITICAL CLICK FIX: ensure UI is always above overlays ===== */
+body { position: relative; isolation: isolate; } /* creates a clean stacking context */
+
+#matrix, .vignette, .scanlines { pointer-events: none !important; }
+
+.shell, .topbar, .modal {
+  position: relative;
+  z-index: 50; /* above scanlines/matrix */
+}
+
+.side-card, .panel, .terminal-frame {
+  position: relative;
+  z-index: 60; /* clickable guaranteed */
+}
+
+/* =========================================================
+   CRITICAL FIX: prevent overlays from stealing clicks
+   (menus/scan/sound/unlock)
+   ========================================================= */
+
+/* Create a clean stacking context so z-index behaves predictably */
+body{
+  isolation: isolate;
+}
+
+/* These layers must NEVER capture input */
+body::before,
+body::after,
+#matrix,
+.vignette,
+.scanlines{
+  pointer-events: none !important;
+}
+
+/* Force UI above everything */
+.topbar{ position: sticky; z-index: 1000; }
+.shell{ position: relative; z-index: 900; }
+.modal{ position: fixed; z-index: 2000; }
+
+/* Ensure interactive blocks are in the UI stacking layer */
+.side, .panel, .side-card, .terminal-frame{
+  position: relative;
+  z-index: 950;
+}
+
+/* Safety: buttons/inputs always clickable */
+button, input, textarea{
+  pointer-events: auto;
 }

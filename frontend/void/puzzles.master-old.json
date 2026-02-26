@@ -1,0 +1,194 @@
+[
+  {
+    "signal_id": "0x301",
+    "title": "Boot Pulse",
+    "difficulty": 1,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x301::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzAxCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Opposite of OFF.",
+    "hint_steps": ["Power state.", "Binary toggle."],
+    "unlock_fragment": "Fragment 1/100 aligned.",
+    "prompt": "Speak the state that activates circuits.",
+    "expected_answer": "ON"
+  },
+  {
+    "signal_id": "0x302",
+    "title": "Neon Protocol",
+    "difficulty": 1,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x302::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzAyCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Theme glow.",
+    "hint_steps": ["Leaf color.", "Matrix neon."],
+    "unlock_fragment": "Fragment 2/100 aligned.",
+    "prompt": "Name the protocol color.",
+    "expected_answer": "GREEN"
+  },
+  {
+    "signal_id": "0x303",
+    "title": "Binary Root",
+    "difficulty": 1,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x303::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzAzCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Nothingness digit.",
+    "hint_steps": ["Binary start.", "Opposite of 1."],
+    "unlock_fragment": "Fragment 3/100 aligned.",
+    "prompt": "First digit of the void?",
+    "expected_answer": "0"
+  },
+
+  {
+    "signal_id": "0x304",
+    "title": "Hidden Door",
+    "difficulty": 2,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x304::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzA0Ck1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Login secret.",
+    "hint_steps": ["Not username.", "Protects accounts."],
+    "unlock_fragment": "Fragment 4/100 aligned.",
+    "prompt": "What unlocks accounts?",
+    "expected_answer": "PASSWORD"
+  },
+
+  {
+    "signal_id": "0x305",
+    "title": "Command Window",
+    "difficulty": 2,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x305::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzA1Ck1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Hackers love it.",
+    "hint_steps": ["Black screen.", "Runs commands."],
+    "unlock_fragment": "Fragment 5/100 aligned.",
+    "prompt": "Name the command interface.",
+    "expected_answer": "TERMINAL"
+  },
+
+  {
+    "signal_id": "0x306",
+    "title": "Secure Channel",
+    "difficulty": 2,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x306::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzA2Ck1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Padlock browser.",
+    "hint_steps": ["HTTP upgrade.", "Encrypted web."],
+    "unlock_fragment": "Fragment 6/100 aligned.",
+    "prompt": "Secure web protocol?",
+    "expected_answer": "HTTPS"
+  },
+
+  {
+    "signal_id": "0x307",
+    "title": "Packet Path",
+    "difficulty": 2,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x307::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzA3Ck1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Internet address.",
+    "hint_steps": ["Two letters.", "Routing identity."],
+    "unlock_fragment": "Fragment 7/100 aligned.",
+    "prompt": "Device address online?",
+    "expected_answer": "IP"
+  },
+
+  {
+    "signal_id": "0x308",
+    "title": "Hidden Ink",
+    "difficulty": 3,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x308::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzA4Ck1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Data hiding art.",
+    "hint_steps": ["Images hide text.", "Covert communication."],
+    "unlock_fragment": "Fragment 8/100 aligned.",
+    "prompt": "Name data hiding technique.",
+    "expected_answer": "STEGANOGRAPHY"
+  },
+
+  {
+    "signal_id": "0x309",
+    "title": "Integrity Echo",
+    "difficulty": 3,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x309::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzA5Ck1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Data fingerprint.",
+    "hint_steps": ["SHA family.", "Integrity check."],
+    "unlock_fragment": "Fragment 9/100 aligned.",
+    "prompt": "Fingerprint of data?",
+    "expected_answer": "HASH"
+  },
+
+  {
+    "signal_id": "0x30A",
+    "title": "Light Packet",
+    "difficulty": 3,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x30A::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzBBCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Quantum light.",
+    "hint_steps": ["Carries energy.", "Physics particle."],
+    "unlock_fragment": "Fragment 10/100 aligned.",
+    "prompt": "Unit of light?",
+    "expected_answer": "PHOTON"
+  },
+
+  {
+    "signal_id": "0x30B",
+    "title": "Dual Cipher",
+    "difficulty": 4,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x30B::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzBBCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Two keys.",
+    "hint_steps": ["Public/private.", "Crypto method."],
+    "unlock_fragment": "Fragment 11/100 aligned.",
+    "prompt": "Cipher using key pairs?",
+    "expected_answer": "ASYMMETRIC"
+  },
+
+  {
+    "signal_id": "0x30C",
+    "title": "Core System",
+    "difficulty": 4,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x30C::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzBDCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "OS heart.",
+    "hint_steps": ["Controls CPU.", "Memory manager."],
+    "unlock_fragment": "Fragment 12/100 aligned.",
+    "prompt": "Core of OS?",
+    "expected_answer": "KERNEL"
+  },
+
+  {
+    "signal_id": "0x30D",
+    "title": "Chaos Meter",
+    "difficulty": 4,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x30D::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzBDCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Randomness.",
+    "hint_steps": ["Crypto randomness.", "Opposite order."],
+    "unlock_fragment": "Fragment 13/100 aligned.",
+    "prompt": "Measure of randomness?",
+    "expected_answer": "ENTROPY"
+  },
+
+  {
+    "signal_id": "0x30E",
+    "title": "Echo Function",
+    "difficulty": 5,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x30E::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzBFCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "Calls itself.",
+    "hint_steps": ["Algorithms.", "Factorial example.", "Self-calling function."],
+    "unlock_fragment": "Fragment 14/100 aligned.",
+    "prompt": "Function calling itself?",
+    "expected_answer": "RECURSION"
+  },
+
+  {
+    "signal_id": "0x30F",
+    "title": "Epoch Clock",
+    "difficulty": 5,
+    "transmission_type": "RIDDLE",
+    "secret_payload": "0x30F::TVlSUUFJX1ZBVUxUX1NUQVJUCkZSMzBGCk1ZUlFBSS1WQVVMVF9FTkQ=",
+    "hint_mask": "1970 start.",
+    "hint_steps": ["Unix time.", "Seconds count."],
+    "unlock_fragment": "Fragment 15/100 aligned.",
+    "prompt": "Unix starting time name?",
+    "expected_answer": "EPOCH"
+  }
+]

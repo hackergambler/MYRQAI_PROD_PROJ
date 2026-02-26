@@ -1,78 +1,139 @@
+// app.js (SESSION RANDOM SINGLE-FRAGMENT GAME LOOP) — ARCHITECTURE FIX (ENGINE-DRIVEN FAIL STAGES)
+// ✅ DOM-safe boot
+// ✅ Engine-driven fail stages (works even if vaultReject() returns nothing)
+// ✅ Modal UX reacts to stage: DENIED / ALERT / HINT / DESTABILIZE / LOCKOUT
+// ✅ No reset-on-open (keeps 3-fail hint progression alive)
+// ✅ Wrong answers: modal feedback + shake; close ONLY on LOCKOUT
+// ✅ Success: reset counter + unlock + next fragment
+// ✅ Anti-bruteforce: LOCKOUT at 20 wrong attempts => session terminated + solved lost + URL cleared
+// ✅ Background loader intact
+// ✅ No repeats within session, auto-next on solve
+
 import {
   initVoidUI,
   setStatus,
   setPhase,
+  clearStream,
   synthesizeFromPayload,
   unlockHintByKey,
   revealDirectHint,
-  setHintMask
+  setHintMask,
+  jumpToNewest,
+  vaultReject,
+  resetRejectCounter,
 } from "./vault-engine.js";
 
-/**
- * MYRQAI GHOST SIGNAL — app.js (FIXED for 100 puzzles)
- *
- * Must exist for localhost:
- *  - /void/puzzles.master.json
- *  - /void/assets/void.png
- */
-
 const PUZZLES_URL = window.__PUZZLES_URL__ || "./puzzles.master.json";
-const DAILY_PULSE = !!window.__DAILY_PULSE__;
-const GEMINI_API_KEY = window.__GEMINI_API_KEY__ || "";
 const BASE_VAULT_IMG = "./assets/void.png";
 
-/* ===== Elements ===== */
-const els = {
-  scanBtn: document.getElementById("scanBtn"),
-  signals: document.getElementById("signals"),
-  urlLabel: document.getElementById("signalsUrlLabel"),
-  syncPct: document.getElementById("syncPct"),
-  syncFill: document.getElementById("syncFill"),
+// session keys
+const S_SEEN = "myrq_seen_signals";
+const S_SOLVED = "myrq_solved_signals";
 
-  // puzzle modal
-  puzzleModal: document.getElementById("puzzleModal"),
-  puzTitle: document.getElementById("puzTitle"),
-  puzMeta: document.getElementById("puzMeta"),
-  puzPrompt: document.getElementById("puzPrompt"),
-  puzPayload: document.getElementById("puzPayload"),
-  puzAnswer: document.getElementById("puzAnswer"),
-  puzSolve: document.getElementById("puzSolve"),
-  puzClose: document.getElementById("puzClose"),
+// fail policy
+const LOCKOUT_AFTER = 20;
 
-  // terminal input
-  keyInput: document.getElementById("keyInput"),
-  unlockBtn: document.getElementById("unlockBtn"),
-
-  // menu
-  menuBtn: document.getElementById("menuBtn"),
-  menuDrop: document.getElementById("menuDrop"),
-  openOnboarding: document.getElementById("openOnboarding"),
-  clearProgress: document.getElementById("clearProgress"),
-  genChallenge: document.getElementById("genChallenge"),
-  soundToggle: document.getElementById("soundToggle"),
-  challengeOut: document.getElementById("challengeOut"),
-  copyChallengeBtn: document.getElementById("copyChallengeBtn"),
-
-  // onboarding
-  onboarding: document.getElementById("onboarding"),
-  closeOnboarding: document.getElementById("closeOnboarding"),
-  obTimer: document.getElementById("obTimer"),
-};
-
+let els = {};
 let PUZZLES = [];
 let active = null;
+let synthesizedFor = null;
+let scanning = false;
+let solving = false;
 
-/* ===== Utils ===== */
+/* =======================
+   Modal feedback
+   ======================= */
+let modalMsgEl = null;
+let modalCloseTimer = null;
+
+function ensureModalMsgEl() {
+  if (!els.puzzleModal) return null;
+  if (modalMsgEl && modalMsgEl.isConnected) return modalMsgEl;
+
+  const existing = els.puzzleModal.querySelector(".puz-msg");
+  if (existing) {
+    modalMsgEl = existing;
+    return modalMsgEl;
+  }
+
+  const msg = document.createElement("div");
+  msg.className = "puz-msg";
+  msg.style.marginTop = "10px";
+  msg.style.padding = "10px 12px";
+  msg.style.borderRadius = "14px";
+  msg.style.fontSize = "12px";
+  msg.style.letterSpacing = ".10em";
+  msg.style.textTransform = "uppercase";
+  msg.style.display = "none";
+  msg.style.userSelect = "none";
+
+  // default "bad"
+  msg.style.border = "1px solid rgba(255,45,109,.35)";
+  msg.style.background = "rgba(255,45,109,.10)";
+  msg.style.color = "rgba(255,230,240,.92)";
+
+  // place under prompt (or inside modal)
+  const anchor = els.puzPrompt?.parentElement || els.puzzleModal;
+  anchor.appendChild(msg);
+
+  modalMsgEl = msg;
+  return modalMsgEl;
+}
+
+function showModalMessage(text, type = "bad") {
+  const el = ensureModalMsgEl();
+  if (!el) return;
+
+  el.textContent = String(text || "");
+  el.style.display = "block";
+
+  if (type === "ok") {
+    el.style.border = "1px solid rgba(0,255,156,.35)";
+    el.style.background = "rgba(0,255,156,.10)";
+    el.style.color = "rgba(225,255,245,.92)";
+  } else if (type === "warn") {
+    el.style.border = "1px solid rgba(255,204,0,.35)";
+    el.style.background = "rgba(255,204,0,.10)";
+    el.style.color = "rgba(255,246,210,.92)";
+  } else {
+    el.style.border = "1px solid rgba(255,45,109,.35)";
+    el.style.background = "rgba(255,45,109,.10)";
+    el.style.color = "rgba(255,230,240,.92)";
+  }
+}
+
+function clearModalMessage() {
+  if (!modalMsgEl) return;
+  modalMsgEl.textContent = "";
+  modalMsgEl.style.display = "none";
+}
+
+function modalShake(ms = 420) {
+  if (!els.puzzleModal) return;
+  const card = els.puzzleModal.querySelector(".modal-card") || els.puzzleModal;
+  card.classList.add("shake");
+  setTimeout(() => card.classList.remove("shake"), ms);
+}
+
+function scheduleClosePuzzle(ms = 650) {
+  clearTimeout(modalCloseTimer);
+  modalCloseTimer = setTimeout(() => closePuzzle(), ms);
+}
+
+/* =======================
+   Utils
+   ======================= */
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, m => (
+  return String(s).replace(/[&<>"']/g, (m) => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]
   ));
 }
-function todayYYYYMMDD() {
-  return new Date().toISOString().slice(0, 10).replaceAll("-", "");
+function normalizeAnswer(s) {
+  return String(s || "").trim().toUpperCase();
 }
-function validateDateKey(val) {
-  return /^\d{8}$/.test(val);
+function parseHexIdToInt(id) {
+  const m = String(id || "").match(/^0x([0-9a-f]+)$/i);
+  return m ? parseInt(m[1], 16) : Number.POSITIVE_INFINITY;
 }
 function showSignalsHelper(msg, extraHtml = "") {
   if (!els.signals) return;
@@ -84,10 +145,30 @@ function showSignalsHelper(msg, extraHtml = "") {
   `;
 }
 
-/* ===== Sound ===== */
+function readSet(key) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+function writeSet(key, set) {
+  try { sessionStorage.setItem(key, JSON.stringify([...set])); } catch {}
+}
+function getSessionSeen() { return readSet(S_SEEN); }
+function getSessionSolved() { return readSet(S_SOLVED); }
+function markSessionSeen(id) { const s = getSessionSeen(); s.add(id); writeSet(S_SEEN, s); }
+function markSessionSolved(id) { const s = getSessionSolved(); s.add(id); writeSet(S_SOLVED, s); }
+
+/* =======================
+   Sound (safe)
+   ======================= */
 const Sound = (() => {
   let on = false;
   let ctx = null;
+
   const ensure = () => (ctx ||= new (window.AudioContext || window.webkitAudioContext)());
   const beep = (freq = 440, dur = 0.06, gain = 0.05) => {
     if (!on) return;
@@ -101,6 +182,7 @@ const Sound = (() => {
     o.start();
     o.stop(ac.currentTime + dur);
   };
+
   return {
     toggle() { on = !on; return on; },
     tick(type) {
@@ -108,75 +190,40 @@ const Sound = (() => {
       else if (type === "bad") { beep(220, .08, .06); }
       else if (type === "rare") { beep(520, .05, .05); setTimeout(() => beep(1040, .09, .06), 60); }
       else if (type === "sys") { beep(440, .04, .03); }
+      else if (type === "warn") { beep(330, .06, .05); }
     }
   };
 })();
 
-/* ===== Signal Strength meter (jitter bar) ===== */
-let jitterTimer = null;
-
-function ensureSignalStrength() {
-  const host = document.querySelector(".meter")?.parentElement;
-  if (!host) return;
-  if (document.getElementById("ssFill")) return;
-
-  const wrap = document.createElement("div");
-  wrap.className = "signal-strength";
-  wrap.innerHTML = `
-    <div class="signal-strength-head">
-      <div class="signal-strength-title">SIGNAL STRENGTH</div>
-      <div class="signal-strength-meta" id="ssPct">—</div>
-    </div>
-    <div class="signal-strength-bar"><div class="signal-strength-fill" id="ssFill"></div></div>
-  `;
-  const signalsEl = host.querySelector(".signals");
-  host.insertBefore(wrap, signalsEl || null);
+/* =======================
+   Background loader
+   ======================= */
+function applyBackgroundImage(url) {
+  if (!url) return;
+  document.documentElement.style.setProperty("--bg-image", `url("${url}")`);
 }
-ensureSignalStrength();
+function loadBackground(url, fallbackUrl = "") {
+  const pick = url || fallbackUrl;
+  if (!pick) return;
 
-function jitter(on) {
-  const fill = document.getElementById("ssFill");
-  const pct = document.getElementById("ssPct");
-  if (!fill || !pct) return;
-
-  if (on) {
-    clearInterval(jitterTimer);
-    jitterTimer = setInterval(() => {
-      const v = Math.floor(12 + Math.random() * 78);
-      fill.style.width = v + "%";
-      pct.textContent = v + "%";
-    }, 90);
-  } else {
-    clearInterval(jitterTimer);
-    fill.style.width = "100%";
-    pct.textContent = "100%";
-    setTimeout(() => { fill.style.width = "72%"; pct.textContent = "72%"; }, 700);
-  }
+  const img = new Image();
+  img.onload = () => {
+    applyBackgroundImage(pick);
+    document.body.classList.add("bg-ready");
+  };
+  img.onerror = () => {
+    if (fallbackUrl && pick !== fallbackUrl) {
+      loadBackground(fallbackUrl, "");
+      return;
+    }
+    console.warn("[BG] failed:", pick);
+  };
+  img.src = pick;
 }
 
-/* ===== Init ===== */
-initVoidUI(
-  { streamSelector: "#voidStream", statusSelector: "#status", badgeSelector: "#phaseBadge" },
-  { beep: (t) => Sound.tick(t) }
-);
-if (els.urlLabel) els.urlLabel.textContent = PUZZLES_URL;
-
-/* ===== Synchronicity meter from URL flags ===== */
-function showManifestReconstruction() {
-  if (document.querySelector(".manifest-overlay")) return;
-  const overlay = document.createElement("div");
-  overlay.className = "manifest-overlay";
-  overlay.innerHTML = `
-    <div class="manifest-box">
-      <h2>MASTER MANIFEST RECONSTRUCTED</h2>
-      <p>Myrq Signal Fully Synchronized.</p>
-      <p>All fragments aligned.</p>
-      <button id="manifestClose">CLOSE</button>
-    </div>`;
-  document.body.appendChild(overlay);
-  document.getElementById("manifestClose").onclick = () => overlay.remove();
-}
-
+/* =======================
+   Synchronicity meter
+   ======================= */
 function setMeter() {
   const params = new URLSearchParams(location.search);
   const solved = PUZZLES.filter(p => params.get("solved_" + p.signal_id) === "1").length;
@@ -184,95 +231,122 @@ function setMeter() {
   const pct = Math.round((solved / total) * 100);
   if (els.syncPct) els.syncPct.textContent = String(pct);
   if (els.syncFill) els.syncFill.style.width = pct + "%";
-  if (pct >= 100 && PUZZLES.length > 0) showManifestReconstruction();
 }
-
-function markSolved(signal_id) {
+function markSolvedUrl(signal_id) {
   const url = new URL(location.href);
   url.searchParams.set("solved_" + signal_id, "1");
   history.replaceState({}, "", url.toString());
   setMeter();
 }
-
-/* ===== Daily Pulse ===== */
-const DAILY_DATE_KEY = "last_pulse_date";
-const DAILY_CACHE_KEY = "myrqai_daily_signals";
-
-async function checkDailyPulse() {
-  if (!DAILY_PULSE) return false;
-
-  const today = new Date().toISOString().slice(0, 10);
-  const last = localStorage.getItem(DAILY_DATE_KEY);
-  const cached = localStorage.getItem(DAILY_CACHE_KEY);
-
-  if (last === today && cached) {
-    setStatus("daily pulse: cached");
-    PUZZLES = JSON.parse(cached);
-    ingestSignals(PUZZLES);
-    setMeter();
-    return true;
-  }
-
-  if (!GEMINI_API_KEY) {
-    revealDirectHint("🜏 Daily Pulse is ON but Gemini key is missing. Falling back to Master Manifest.", { mode: "SYSTEM", key: "daily" });
-    return false;
-  }
-
-  setPhase("SCANNING");
-  setStatus("STABILIZING DAILY SIGNAL...");
-  revealDirectHint("⟡ STABILIZING DAILY SIGNAL...", { mode: "SYSTEM", key: "daily", rare: true });
-  jitter(true);
-
-  try {
-    const signals = await generateDailySignalsGemini();
-    localStorage.setItem(DAILY_DATE_KEY, today);
-    localStorage.setItem(DAILY_CACHE_KEY, JSON.stringify(signals));
-    PUZZLES = signals;
-    ingestSignals(PUZZLES);
-    setMeter();
-    revealDirectHint("⟡ STABILIZING DAILY SIGNAL... SUCCESS.", { mode: "SYSTEM", key: "daily", rare: true });
-    setStatus("daily pulse ready");
-    jitter(false);
-    Sound.tick("rare");
-    return true;
-  } catch {
-    jitter(false);
-    setStatus("daily pulse failed");
-    revealDirectHint("🜏 Daily Pulse failed. Falling back to Master Manifest.", { mode: "SYSTEM", key: "daily" });
-    return false;
-  }
+function clearSolvedUrlFlags() {
+  const url = new URL(location.href);
+  const keys = Array.from(url.searchParams.keys());
+  for (const k of keys) if (k.startsWith("solved_")) url.searchParams.delete(k);
+  history.replaceState({}, "", url.toString());
 }
 
-async function generateDailySignalsGemini() {
-  const prompt = `
-Return ONLY valid JSON (no markdown).
-Create an array of 3 Signal objects for "MYRQAI GHOST SIGNAL".
-Fields: signal_id (hex), title, difficulty(1-5), transmission_type,
-secret_payload ("<signal_id>::<base64>" OR "<signal_id>::enc:v1:<...>"),
-hint_mask, synchronicity_weight (integer), unlock_fragment (string),
-expected_answer (string).
-Weights must sum to 100.
-`;
-  const r = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + encodeURIComponent(GEMINI_API_KEY),
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-    }
-  );
-  const j = await r.json();
-  const text = j?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("gemini empty");
-  return JSON.parse(text);
+/* =======================
+   Jitter (finite)
+   ======================= */
+let jitterClassTimer = null;
+function clearJitterClasses() {
+  const el = document.body;
+  [...el.classList].forEach(c => { if (c.startsWith("signal-jitter-")) el.classList.remove(c); });
+}
+function difficultyJitter(level = 1) {
+  clearTimeout(jitterClassTimer);
+  clearJitterClasses();
+  const cls = "signal-jitter-" + level;
+  document.body.classList.add(cls);
+  jitterClassTimer = setTimeout(() => {
+    document.body.classList.remove(cls);
+    clearJitterClasses();
+  }, 520);
 }
 
-/* ===== Scan (Master Manifest) ===== */
+/* =======================
+   Crypto verify
+   ======================= */
+async function sha256Hex(str) {
+  const data = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  const bytes = new Uint8Array(hash);
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
+async function verifyAnswer(sig, answerRaw) {
+  const ans = normalizeAnswer(answerRaw);
+  if (!ans) return false;
+
+  if (sig.answer_hash && sig.salt) {
+    const computed = await sha256Hex(`${sig.salt}:${ans}`);
+    return computed === String(sig.answer_hash).toLowerCase();
+  }
+  if (sig.expected_answer) return ans === normalizeAnswer(sig.expected_answer);
+  return false;
+}
+
+/* =======================
+   Random single fragment selection
+   ======================= */
+function isUrlSolved(sigId) {
+  const params = new URLSearchParams(location.search);
+  return params.get("solved_" + sigId) === "1";
+}
+function pickRandomUnsolved() {
+  const sessionSolved = getSessionSolved();
+  const pool = PUZZLES.filter(p => !isUrlSolved(p.signal_id) && !sessionSolved.has(p.signal_id));
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function renderSingleSignal(sig) {
+  if (!els.signals) return;
+
+  if (!sig) {
+    els.signals.innerHTML = `
+      <div class="side-text muted tiny">
+        No unsolved fragments available (this session).<br/>
+        Reset progress or start a new session.
+      </div>
+    `;
+    return;
+  }
+
+  els.signals.innerHTML = "";
+
+  const frame = document.createElement("div");
+  frame.className = "fragment-frame";
+
+  const btn = document.createElement("button");
+  btn.className = "signal-card single-card";
+  btn.type = "button";
+
+  const t = sig.transmission_type || "SIGNAL";
+  const hint = (sig.hint_mask || "").slice(0, 140);
+
+  btn.innerHTML = `
+    <div class="signal-title">${escapeHtml(sig.title || sig.signal_id)}</div>
+    <div class="signal-meta">ID ${escapeHtml(sig.signal_id)} • DIFFICULTY ${sig.difficulty || 1} • ${escapeHtml(t)}</div>
+    <div class="signal-desc">${escapeHtml(hint)}${(sig.hint_mask || "").length > 140 ? "…" : ""}</div>
+    <div class="signal-cta">CLICK TO SYNTHESIZE →</div>
+  `;
+
+  btn.addEventListener("click", () => openSignal(sig));
+  frame.appendChild(btn);
+  els.signals.appendChild(frame);
+}
+
+/* =======================
+   Scan
+   ======================= */
 async function scanForSignals() {
+  if (scanning) return;
+  scanning = true;
+
   setPhase("SCANNING");
   setStatus("scanning…");
-  jitter(true);
-
   showSignalsHelper("Scanning…");
 
   try {
@@ -281,256 +355,529 @@ async function scanForSignals() {
 
     const text = await r.text();
     let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      throw new Error("puzzles.master.json is not valid JSON (server returned HTML?)");
-    }
+    try { parsed = JSON.parse(text); }
+    catch { throw new Error("puzzles.master.json is not valid JSON (server returned HTML?)"); }
 
     if (!Array.isArray(parsed)) throw new Error("puzzles.master.json must be an ARRAY");
+    for (const p of parsed) {
+      if (!p?.signal_id || !p?.secret_payload) throw new Error("One or more puzzles missing signal_id/secret_payload");
+    }
 
+    parsed.sort((a, b) => parseHexIdToInt(a.signal_id) - parseHexIdToInt(b.signal_id));
     PUZZLES = parsed;
-    ingestSignals(PUZZLES);
-    setMeter();
 
-    setStatus(`signals ingested (${PUZZLES.length})`);
+    setMeter();
+    setStatus(`signals loaded (${PUZZLES.length})`);
     Sound.tick("sys");
 
-    if (PUZZLES.length === 0) showSignalsHelper("No signals found in puzzles.master.json");
+    const chosen = pickRandomUnsolved();
+    if (chosen) {
+      markSessionSeen(chosen.signal_id);
+      renderSingleSignal(chosen);
+      revealDirectHint("⟡ SCAN COMPLETE.\nOne fragment has been selected for this session.", { mode: "SYSTEM", key: "SCAN", rare: true });
+      jumpToNewest?.();
+    } else {
+      renderSingleSignal(null);
+      revealDirectHint("⟡ NO NEW FRAGMENTS.\nAll available fragments are solved (or solved this session).", { mode: "SYSTEM", key: "SCAN" });
+      jumpToNewest?.();
+    }
   } catch (e) {
     const msg = e?.message || "scan failed";
     setStatus("scan failed");
-    showSignalsHelper(
-      "SCAN failed: " + msg,
-      `Open directly: <code>${escapeHtml(new URL(PUZZLES_URL, location.href).toString())}</code>`
-    );
-    revealDirectHint("🜏 SCAN FAILED. Ensure /void/puzzles.master.json exists and is served by your server.", { mode: "SYSTEM", key: "SCAN" });
+    showSignalsHelper("SCAN failed: " + msg, `Open directly: <code>${escapeHtml(new URL(PUZZLES_URL, location.href).toString())}</code>`);
+    revealDirectHint("🜏 SCAN FAILED.\nEnsure puzzles.master.json exists and is served.", { mode: "SYSTEM", key: "SCAN" });
     Sound.tick("bad");
   } finally {
-    jitter(false);
+    scanning = false;
   }
 }
 
-function ingestSignals(list) {
-  if (!els.signals) return;
-  els.signals.innerHTML = "";
-
-  list.forEach(sig => {
-    const btn = document.createElement("button");
-    btn.className = "signal-card";
-    btn.type = "button";
-    const t = sig.transmission_type || "SIGNAL";
-
-    btn.innerHTML = `
-      <div class="signal-title">${escapeHtml(sig.title || sig.signal_id)}</div>
-      <div class="signal-meta">ID ${escapeHtml(sig.signal_id)} • DIFFICULTY ${sig.difficulty || 1} • ${escapeHtml(t)}</div>
-      <div class="signal-desc">${escapeHtml((sig.hint_mask || "").slice(0, 100))}${(sig.hint_mask || "").length > 100 ? "…" : ""}</div>
-    `;
-
-    btn.addEventListener("click", () => openSignal(sig));
-    els.signals.appendChild(btn);
-  });
-}
-
-/* ===== Difficulty-based Signal Jitter ===== */
-function difficultyJitter(level = 1) {
-  const el = document.body;
-  el.classList.add("signal-jitter-" + level);
-  setTimeout(() => el.classList.remove("signal-jitter-" + level), 900 + level * 200);
-}
-
-/* ===== Open / Synthesize / Solve ===== */
-function buildPrompt(sig) {
-  // Use puzzle prompt if provided by JSON
-  if (sig.prompt) return String(sig.prompt);
-
-  // fallback for old manifest types
-  if (sig.transmission_type === "CAESAR") return "Caesar detected. Provide the correct decrypted keyword.";
-  if (sig.transmission_type === "CSS_GHOST") return "Inspect hidden CSS variables / metadata for the key.";
-  if (sig.transmission_type === "AES_GCM") return "Decrypt the enc:v1 fragment using the required key.";
-  if (sig.transmission_type === "LOGIC_DATE") return "Enter today's date in YYYYMMDD format.";
-  if (sig.transmission_type === "MASTER_RIDDLE") return "Combine previous keys + date into one answer.";
-  return "Solve the signal (use the hint mask).";
-}
-
-function openSignal(sig) {
+/* =======================
+   Open/Close Signal
+   ======================= */
+async function openSignal(sig) {
   active = sig;
+
+  // ✅ ARCHITECTURE FIX:
+  // DO NOT reset reject counter on open.
+  // Otherwise multi-fail hint progression can never happen.
+  // resetRejectCounter(sig.signal_id);
+
+  clearTimeout(modalCloseTimer);
+  clearModalMessage();
+
   difficultyJitter(sig.difficulty || 1);
 
   setHintMask(sig.hint_mask || "");
   setPhase("SYNTHESIZING");
-  setStatus("synthesizing…");
+  setStatus("stabilizing signal…");
 
-  synthesizeFromPayload(sig.secret_payload, BASE_VAULT_IMG)
-    .then(() => {
-      setPhase("UNLOCKING");
+  if (synthesizedFor !== sig.signal_id) {
+    try {
+      await synthesizeFromPayload(sig.secret_payload, BASE_VAULT_IMG, { signal_id: sig.signal_id });
+      synthesizedFor = sig.signal_id;
+      setPhase("READY");
       setStatus("signal stabilized");
       Sound.tick("ok");
-
-      // Show its key-based hint in stream if your vault-engine supports it
-      unlockHintByKey(sig.signal_id);
-
-      if (sig.unlock_fragment) {
-        revealDirectHint("⟡ " + sig.unlock_fragment, { mode: "SYSTEM", key: sig.signal_id, rare: true });
-      }
-    })
-    .catch(() => {
-      setStatus("synthesis failed (check ./assets/void.png path)");
+    } catch {
+      setStatus("synthesis failed");
+      revealDirectHint("🜏 SYNTHESIS FAILED.\nCheck base image path and payload integrity.", { mode: "SYSTEM", key: "SYNTH" });
       Sound.tick("bad");
-    });
+      return;
+    }
+  } else {
+    setPhase("READY");
+    setStatus("signal cached");
+  }
 
-  // Modal
   if (!els.puzzleModal) return;
-  els.puzTitle.textContent = sig.title || sig.signal_id;
-  els.puzMeta.textContent = `Signal: ${sig.signal_id} • ${sig.transmission_type || "SIGNAL"} • Difficulty ${sig.difficulty || 1}`;
-  els.puzPrompt.textContent = buildPrompt(sig);
-  els.puzPayload.value = sig.secret_payload || "";
-  els.puzAnswer.value = "";
+
+  els.puzTitle && (els.puzTitle.textContent = sig.title || sig.signal_id);
+  els.puzMeta && (els.puzMeta.textContent =
+    `Signal: ${sig.signal_id} • ${sig.transmission_type || "SIGNAL"} • Difficulty ${sig.difficulty || 1}`);
+  els.puzPrompt && (els.puzPrompt.textContent = sig.prompt ? String(sig.prompt) : "Solve the signal.");
+  if (els.puzPayload) els.puzPayload.value = "";
+  if (els.puzAnswer) els.puzAnswer.value = "";
+
   els.puzzleModal.classList.add("show");
   els.puzAnswer?.focus?.();
 }
 
 function closePuzzle() {
+  clearTimeout(modalCloseTimer);
   els.puzzleModal?.classList.remove("show");
+  clearModalMessage();
   active = null;
 }
-els.puzClose?.addEventListener("click", closePuzzle);
 
-// close when clicking backdrop
-els.puzzleModal?.addEventListener("click", (e) => {
-  if (e.target === els.puzzleModal) closePuzzle();
-});
+/* =======================
+   Engine-driven fail state adapter
+   - If vaultReject() returns {count, stage, snippet}, we use it.
+   - If it returns nothing (current engine), we compute stages locally
+     while still calling engine for terminal output.
+   ======================= */
+const LOCAL_FAIL = new Map(); // signalId -> count
 
-els.puzSolve?.addEventListener("click", () => {
-  if (!active) return;
-
-  const ans = (els.puzAnswer.value || "").trim().toUpperCase();
-  let ok = false;
-
-  // ✅ Generic solving for 100 puzzles
-  if (active.expected_answer) {
-    ok = ans === String(active.expected_answer).trim().toUpperCase();
-  }
-
-  // ✅ Dynamic date puzzles (optional)
-  if (!ok && active.transmission_type === "LOGIC_DATE") {
-    const t = todayYYYYMMDD();
-    ok = validateDateKey(ans) && ans === t;
-  }
-
-  // ✅ Master riddle (optional)
-  if (!ok && active.transmission_type === "MASTER_RIDDLE") {
-    const t = todayYYYYMMDD();
-    ok = ans === `ORIGIN-SILENCE-GHOST-${t}`;
-  }
-
-  if (ok) {
-    markSolved(active.signal_id);
-    revealDirectHint("⟡ SOLVED: " + (active.title || active.signal_id), { mode: "SYSTEM", key: "SOLVED", rare: true });
-    Sound.tick("rare");
-    closePuzzle();
-  } else {
-    setStatus("incorrect");
-    Sound.tick("bad");
-  }
-});
-
-/* ===== Terminal input ===== */
-els.unlockBtn?.addEventListener("click", () => {
-  const v = (els.keyInput.value || "").trim();
-  if (!v) return setStatus("paste fragment or enter key");
-  unlockHintByKey(v);
-});
-els.keyInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") els.unlockBtn.click(); });
-
-/* ===== Menu ===== */
-els.menuBtn?.addEventListener("click", () => {
-  const open = els.menuDrop.classList.toggle("open");
-  els.menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
-});
-document.addEventListener("click", (e) => {
-  if (!els.menuDrop?.classList.contains("open")) return;
-  if (e.target === els.menuBtn || els.menuDrop.contains(e.target)) return;
-  els.menuDrop.classList.remove("open");
-  els.menuBtn?.setAttribute("aria-expanded", "false");
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    if (els.menuDrop?.classList.contains("open")) {
-      els.menuDrop.classList.remove("open");
-      els.menuBtn?.setAttribute("aria-expanded", "false");
-    }
-    closePuzzle();
-  }
-});
-
-/* ===== Onboarding ===== */
-function openOnboarding() {
-  els.onboarding?.classList.add("show");
-  let t = 10;
-  if (els.obTimer) els.obTimer.textContent = String(t);
-  const it = setInterval(() => {
-    t--;
-    if (els.obTimer) els.obTimer.textContent = String(Math.max(t, 0));
-    if (t <= 0) {
-      clearInterval(it);
-      els.onboarding?.classList.remove("show");
-    }
-  }, 1000);
-}
-els.openOnboarding?.addEventListener("click", openOnboarding);
-els.closeOnboarding?.addEventListener("click", () => els.onboarding?.classList.remove("show"));
-if (!sessionStorage.getItem("myrq_seen_ob")) {
-  sessionStorage.setItem("myrq_seen_ob", "1");
-  setTimeout(openOnboarding, 500);
+function localBump(signalId) {
+  const k = String(signalId || "UNKNOWN").toUpperCase();
+  const n = (LOCAL_FAIL.get(k) || 0) + 1;
+  LOCAL_FAIL.set(k, n);
+  return n;
 }
 
-/* ===== Sound toggle ===== */
-els.soundToggle?.addEventListener("click", () => {
-  const on = Sound.toggle();
-  els.soundToggle.textContent = "SOUND: " + (on ? "ON" : "OFF");
-  setStatus(on ? "sound enabled" : "sound disabled");
-});
-
-/* ===== Challenge code ===== */
-function genChallenge() {
-  const code = ("GS-" + Math.random().toString(36).slice(2, 6) + "-" + Math.random().toString(36).slice(2, 6)).toUpperCase();
-  if (els.challengeOut) els.challengeOut.value = code;
-
-  const link = new URL(location.href);
-  link.searchParams.set("challenge", code);
-
-  navigator.clipboard?.writeText(link.toString()).catch(() => {});
-  revealDirectHint("⟡ CHALLENGE LINK COPIED:\n" + link.toString(), { mode: "SYSTEM", key: "CHALLENGE", rare: true });
-  Sound.tick("rare");
+function localReset(signalId) {
+  const k = String(signalId || "UNKNOWN").toUpperCase();
+  LOCAL_FAIL.delete(k);
 }
-els.genChallenge?.addEventListener("click", genChallenge);
 
-els.copyChallengeBtn?.addEventListener("click", async () => {
-  const v = els.challengeOut?.value?.trim();
-  if (!v) return;
-  try { await navigator.clipboard.writeText(v); setStatus("challenge copied"); }
-  catch { prompt("Copy:", v); }
-});
+function deriveStageAndSnippet(count, sig) {
+  const hint = String(sig?.hint_mask || "").trim();
+  const leak = hint ? hint.slice(0, Math.min(70, hint.length)) + (hint.length > 70 ? "…" : "") : "";
 
-els.clearProgress?.addEventListener("click", () => {
-  const url = new URL(location.href);
-  Array.from(url.searchParams.keys()).forEach(k => { if (k.startsWith("solved_")) url.searchParams.delete(k); });
-  history.replaceState({}, "", url.toString());
-  setMeter();
-  setStatus("url flags cleared");
-});
+  // Stage model:
+  // 1 DENIED
+  // 2 ALERT
+  // 3 HINT (leak)
+  // 4..(LOCKOUT_AFTER-1) DESTABILIZE
+  // LOCKOUT_AFTER LOCKOUT (terminate session)
+  if (count <= 1) return { stage: "DENIED", snippet: "" };
+  if (count === 2) return { stage: "ALERT", snippet: "" };
+  if (count === 3) return { stage: "HINT", snippet: leak };
+  if (count >= LOCKOUT_AFTER) return { stage: "LOCKOUT", snippet: "SESSION TERMINATED" };
+  return { stage: "DESTABILIZE", snippet: leak ? `LEAK: ${leak}` : "" };
+}
 
-/* ===== SCAN button wiring ===== */
-els.scanBtn?.addEventListener("click", () => scanForSignals());
+function rejectInfo(signalId, difficulty, sig) {
+  let info;
+  try {
+    info = vaultReject(signalId, difficulty);
+  } catch {
+    info = null;
+  }
 
-/* ===== Start ===== */
-(async () => {
-  showSignalsHelper(
-    "Press SCAN to load signals.",
-    `Expected: <code>${escapeHtml(new URL(PUZZLES_URL, location.href).toString())}</code>`
+  // Engine already maintains its own counters; but if it returns nothing,
+  // we must maintain counts here for UX.
+  if (info && typeof info === "object") {
+    const count = Number(info.count || 1);
+    const stage = String(info.stage || "DENIED").toUpperCase();
+    const snippet = String(info.snippet || "");
+    return { count, stage, snippet };
+  }
+
+  const count = localBump(signalId);
+  const { stage, snippet } = deriveStageAndSnippet(count, sig);
+  return { count, stage, snippet };
+}
+
+/* =======================
+   Lockout termination
+   ======================= */
+function terminateSession(signalId) {
+  // clear URL solved flags
+  clearSolvedUrlFlags();
+
+  // clear session memory
+  try {
+    sessionStorage.removeItem(S_SEEN);
+    sessionStorage.removeItem(S_SOLVED);
+  } catch {}
+
+  // reset local + engine counters
+  LOCAL_FAIL.clear();
+  try { resetRejectCounter?.(signalId); } catch {}
+
+  // close modal
+  closePuzzle();
+
+  setStatus("session terminated");
+  setPhase("LOCKOUT");
+
+  revealDirectHint(
+`⚠ BRUTE FORCE DETECTED
+20 failed attempts recorded.
+
+SESSION TERMINATED.
+Solved fragments lost.
+
+Scan again to continue.`,
+    { mode: "SYSTEM", key: "LOCKOUT", rare: true }
   );
 
-  const daily = await checkDailyPulse();
-  if (!daily) await scanForSignals();
-})();
+  // reset UI meter + panel
+  setMeter();
+  showSignalsHelper("Session terminated. Press SCAN to pull a new fragment.");
+}
+
+/* =======================
+   Engine-driven modal UX
+   ======================= */
+function modalMessageFromReject(rej) {
+  const n = rej?.count ?? 1;
+  const stage = String(rej?.stage || "DENIED").toUpperCase();
+  const snippet = (rej?.snippet || "").trim();
+
+  if (stage === "DENIED") {
+    return { type: "bad", text: `ACCESS DENIED • TRY AGAIN (${n}/${LOCKOUT_AFTER})`, close: false, shake: 520 };
+  }
+  if (stage === "ALERT") {
+    return { type: "warn", text: `SECOND FAILURE • THINK DIFFERENT (${n}/${LOCKOUT_AFTER})`, close: false, shake: 480 };
+  }
+  if (stage === "HINT") {
+    return {
+      type: "warn",
+      text: snippet ? `HINT LEAK (${n}/${LOCKOUT_AFTER}) • ${snippet}` : `HINT LEAK (${n}/${LOCKOUT_AFTER})`,
+      close: false, // keep open so user can use the hint
+      shake: 380,
+    };
+  }
+  if (stage === "DESTABILIZE") {
+    return {
+      type: "bad",
+      text: snippet ? `DESTABILIZING (${n}/${LOCKOUT_AFTER}) • ${snippet}` : `DESTABILIZING (${n}/${LOCKOUT_AFTER})`,
+      close: false,
+      shake: 520,
+    };
+  }
+  if (stage === "LOCKOUT") {
+    return {
+      type: "bad",
+      text: "LOCKOUT • SESSION TERMINATED",
+      close: true, // close on lockout
+      shake: 620,
+    };
+  }
+  return { type: "bad", text: `REJECTED (${n}/${LOCKOUT_AFTER})`, close: false, shake: 520 };
+}
+
+/* =======================
+   Solve flow
+   ======================= */
+async function solveActive() {
+  if (!active) return;
+  if (solving) return;
+  solving = true;
+
+  try {
+    const ans = (els.puzAnswer?.value || "").trim();
+    if (!ans) {
+      setStatus("type an answer");
+      showModalMessage("TYPE AN ANSWER", "warn");
+      modalShake(420);
+      Sound.tick("sys");
+      els.puzAnswer?.focus?.();
+      return; // keep open
+    }
+
+    let ok = false;
+    try { ok = await verifyAnswer(active, ans); } catch { ok = false; }
+
+    if (!ok) {
+      const rej = rejectInfo(active.signal_id, active.difficulty || 1, active);
+      const ui = modalMessageFromReject(rej);
+
+      showModalMessage(ui.text, ui.type);
+      modalShake(ui.shake || 520);
+
+      // Soft warning beep as failures escalate
+      if (rej.stage === "ALERT" || rej.stage === "HINT") Sound.tick("warn");
+
+      // terminate on LOCKOUT
+      if (rej.stage === "LOCKOUT" || rej.count >= LOCKOUT_AFTER) {
+        scheduleClosePuzzle(250);
+        terminateSession(active.signal_id);
+        return;
+      }
+
+      // keep modal open for hints
+      els.puzAnswer?.focus?.();
+      return;
+    }
+
+    // ✅ SUCCESS: reset fail counters (local + engine)
+    localReset(active.signal_id);
+    resetRejectCounter?.(active.signal_id);
+
+    showModalMessage("ACCEPTED • FRAGMENT UNLOCKED", "ok");
+
+    markSolvedUrl(active.signal_id);
+    markSessionSolved(active.signal_id);
+
+    setStatus("unlocked");
+    Sound.tick("rare");
+
+    unlockHintByKey(active.signal_id);
+
+    revealDirectHint("⟡ SOLVED: " + (active.title || active.signal_id), { mode: "SYSTEM", key: "SOLVED", rare: true });
+    if (active.unlock_fragment) {
+      revealDirectHint("⟡ " + active.unlock_fragment, { mode: "SYSTEM", key: active.signal_id, rare: true });
+    }
+
+    scheduleClosePuzzle(520);
+    jumpToNewest?.();
+
+    const next = pickRandomUnsolved();
+    if (next) {
+      markSessionSeen(next.signal_id);
+      renderSingleSignal(next);
+      revealDirectHint("⟡ NEXT FRAGMENT SELECTED.\nContinue the hunt.", { mode: "SYSTEM", key: "NEXT", rare: true });
+      jumpToNewest?.();
+    } else {
+      renderSingleSignal(null);
+      revealDirectHint("⟡ SESSION COMPLETE.\nNo unsolved fragments remain (this session).", { mode: "SYSTEM", key: "DONE", rare: true });
+      jumpToNewest?.();
+    }
+  } finally {
+    setTimeout(() => { solving = false; }, 120);
+  }
+}
+
+/* =======================
+   Menu helpers
+   ======================= */
+function toggleMenu(force) {
+  if (!els.menuDrop || !els.menuBtn) return;
+  const open = typeof force === "boolean" ? force : !els.menuDrop.classList.contains("open");
+  els.menuDrop.classList.toggle("open", open);
+  els.menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+/* =======================
+   Boot (DOM-safe)
+   ======================= */
+function wireUI() {
+  els = {
+    scanBtn: document.getElementById("scanBtn"),
+    signals: document.getElementById("signals"),
+    urlLabel: document.getElementById("signalsUrlLabel"),
+    syncPct: document.getElementById("syncPct"),
+    syncFill: document.getElementById("syncFill"),
+
+    puzzleModal: document.getElementById("puzzleModal"),
+    puzTitle: document.getElementById("puzTitle"),
+    puzMeta: document.getElementById("puzMeta"),
+    puzPrompt: document.getElementById("puzPrompt"),
+    puzPayload: document.getElementById("puzPayload"),
+    puzAnswer: document.getElementById("puzAnswer"),
+    puzSolve: document.getElementById("puzSolve"),
+    puzClose: document.getElementById("puzClose"),
+
+    keyInput: document.getElementById("keyInput"),
+    unlockBtn: document.getElementById("unlockBtn"),
+    clearBtn: document.getElementById("clearBtn"),
+
+    menuBtn: document.getElementById("menuBtn"),
+    menuDrop: document.getElementById("menuDrop"),
+    openOnboarding: document.getElementById("openOnboarding"),
+    clearProgress: document.getElementById("clearProgress"),
+    genChallenge: document.getElementById("genChallenge"),
+    soundToggle: document.getElementById("soundToggle"),
+    challengeOut: document.getElementById("challengeOut"),
+    copyChallengeBtn: document.getElementById("copyChallengeBtn"),
+
+    onboarding: document.getElementById("onboarding"),
+    closeOnboarding: document.getElementById("closeOnboarding"),
+    obTimer: document.getElementById("obTimer"),
+  };
+
+  initVoidUI(
+    {
+      streamSelector: "#voidStream",
+      statusSelector: "#status",
+      badgeSelector: "#phaseBadge",
+      newestBtnSelector: "#streamTopBtn",
+    },
+    { beep: (t) => Sound.tick(t) }
+  );
+
+  if (els.urlLabel) els.urlLabel.textContent = PUZZLES_URL;
+  loadBackground(window.__BG_IMAGE__, BASE_VAULT_IMG);
+
+  els.scanBtn?.addEventListener("click", () => scanForSignals());
+
+  els.unlockBtn?.addEventListener("click", () => {
+    const v = (els.keyInput?.value || "").trim();
+    if (!v) {
+      setStatus("type a key (0x...) or paste enc:v1 fragment");
+      Sound.tick("sys");
+      return;
+    }
+    unlockHintByKey(v);
+  });
+  els.keyInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") els.unlockBtn?.click?.();
+  });
+
+  els.clearBtn?.addEventListener("click", () => {
+    clearStream();
+    setStatus("stream cleared");
+    Sound.tick("sys");
+  });
+
+  // Modal controls
+  els.puzClose?.addEventListener("click", closePuzzle);
+  els.puzzleModal?.addEventListener("click", (e) => {
+    if (e.target === els.puzzleModal) closePuzzle();
+  });
+  els.puzSolve?.addEventListener("click", solveActive);
+  els.puzAnswer?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      solveActive();
+    }
+  });
+
+  // Menu
+  els.menuBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleMenu();
+  });
+  document.addEventListener("click", (e) => {
+    if (!els.menuDrop?.classList.contains("open")) return;
+    const inMenu = e.target?.closest?.("#menuDrop");
+    const onBtn = e.target?.closest?.("#menuBtn");
+    if (inMenu || onBtn) return;
+    toggleMenu(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      toggleMenu(false);
+      closePuzzle();
+    }
+  });
+
+  // Onboarding
+  function openOnboarding() {
+    els.onboarding?.classList.add("show");
+    let t = 10;
+    if (els.obTimer) els.obTimer.textContent = String(t);
+    const it = setInterval(() => {
+      t--;
+      if (els.obTimer) els.obTimer.textContent = String(Math.max(t, 0));
+      if (t <= 0) {
+        clearInterval(it);
+        els.onboarding?.classList.remove("show");
+      }
+    }, 1000);
+  }
+  els.openOnboarding?.addEventListener("click", openOnboarding);
+  els.closeOnboarding?.addEventListener("click", () => els.onboarding?.classList.remove("show"));
+  if (!sessionStorage.getItem("myrq_seen_ob")) {
+    sessionStorage.setItem("myrq_seen_ob", "1");
+    setTimeout(openOnboarding, 500);
+  }
+
+  // Sound toggle
+  els.soundToggle?.addEventListener("click", () => {
+    const on = Sound.toggle();
+    els.soundToggle.textContent = "SOUND: " + (on ? "ON" : "OFF");
+    setStatus(on ? "sound enabled" : "sound disabled");
+    Sound.tick("sys");
+  });
+
+  // Challenge
+  function genChallenge() {
+    const code = ("GS-" + Math.random().toString(36).slice(2, 6) + "-" + Math.random().toString(36).slice(2, 6)).toUpperCase();
+    if (els.challengeOut) els.challengeOut.value = code;
+
+    const link = new URL(location.href);
+    link.searchParams.set("challenge", code);
+
+    navigator.clipboard?.writeText(link.toString()).catch(() => {});
+    revealDirectHint("⟡ CHALLENGE LINK COPIED:\n" + link.toString(), { mode: "SYSTEM", key: "CHALLENGE", rare: true });
+    Sound.tick("rare");
+    jumpToNewest?.();
+  }
+  els.genChallenge?.addEventListener("click", genChallenge);
+
+  els.copyChallengeBtn?.addEventListener("click", async () => {
+    const v = els.challengeOut?.value?.trim();
+    if (!v) return;
+    try { await navigator.clipboard.writeText(v); setStatus("challenge copied"); }
+    catch { prompt("Copy:", v); }
+  });
+
+  // Clear progress
+  els.clearProgress?.addEventListener("click", () => {
+    clearSolvedUrlFlags();
+
+    try {
+      sessionStorage.removeItem(S_SEEN);
+      sessionStorage.removeItem(S_SOLVED);
+    } catch {}
+
+    LOCAL_FAIL.clear();
+    if (active?.signal_id) {
+      localReset(active.signal_id);
+      resetRejectCounter?.(active.signal_id);
+    }
+
+    setMeter();
+    setStatus("progress reset");
+    revealDirectHint("⟡ PROGRESS RESET.\nScan again to get a new random fragment.", { mode: "SYSTEM", key: "RESET", rare: true });
+    jumpToNewest?.();
+    showSignalsHelper("Press SCAN to pull a fragment…");
+  });
+
+  showSignalsHelper(
+    "Press SCAN to pull a fragment…",
+    `Expected: <code>${escapeHtml(new URL(PUZZLES_URL, location.href).toString())}</code>`
+  );
+}
+
+async function boot() {
+  wireUI();
+  await scanForSignals();
+
+  revealDirectHint(
+    "⟡ SIGNAL HUNTER ONLINE.\nSCAN picks one random fragment per session.\nSolve to unlock the next.",
+    { mode: "SYSTEM", key: "BOOT", rare: true }
+  );
+  jumpToNewest?.();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => { boot(); }, { once: true });
+} else {
+  boot();
+}

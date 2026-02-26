@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>The Myrq Protocol: Ghost Signal</title>
+  <meta name="description" content="You are a Signal Hunter. Scan, synthesize, and reconstruct the Master Manifest." />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+  <canvas id="matrix" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">🜏</span>
+      <div class="brand-text">
+        <div class="brand-title">THE MYRQ PROTOCOL</div>
+        <div class="brand-sub">GHOST SIGNAL // 2026</div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="scanBtn" class="chip" type="button">SCAN</button>
+      <button id="soundToggle" class="chip" type="button">SOUND: OFF</button>
+
+      <div class="menu">
+        <button id="menuBtn" class="chip" type="button" aria-haspopup="true" aria-expanded="false">MENU ▾</button>
+        <div id="menuDrop" class="menu-drop" role="menu" aria-label="Menu">
+          <button class="menu-item" id="openOnboarding" type="button" role="menuitem">How it works</button>
+          <button class="menu-item" id="genChallenge" type="button" role="menuitem">Generate challenge code</button>
+          <button class="menu-item" id="clearProgress" type="button" role="menuitem">Reset progress</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="side">
+      <div class="side-card">
+        <div class="side-title">ACTIVE FRAGMENT</div>
+        <div class="side-text">Scan will select <b>one random signal</b>. Solve it to unlock the next.</div>
+
+        <div class="meter">
+          <div class="meter-head">
+            <div class="meter-title">SYNCHRONICITY</div>
+            <div class="meter-meta"><span id="syncPct">0</span>%</div>
+          </div>
+          <div class="meter-bar"><div id="syncFill" class="meter-fill"></div></div>
+          <div class="meter-sub">Session-based progression + URL flags: <code>?solved_0x100=1</code></div>
+        </div>
+
+        <!-- ✅ ONE signal only (random, session-safe) -->
+        <div id="signals" class="signals single">
+          <div class="side-text muted tiny" id="signalsHint">Press SCAN to pull a fragment…</div>
+        </div>
+
+        <div class="side-text muted tiny">Source: <span id="signalsUrlLabel"></span></div>
+      </div>
+
+      <div class="side-card">
+        <div class="side-title">Challenge Code</div>
+        <div class="side-text">Invite another Signal Hunter.</div>
+        <div class="row">
+          <input id="challengeOut" class="pw" placeholder="code appears here" readonly />
+          <button id="copyChallengeBtn" class="btn ghost small" type="button">COPY</button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="panel" role="region" aria-label="Ghost Signal Terminal">
+      <div class="panel-head">
+        <div class="badge" id="phaseBadge">SCANNING</div>
+
+        <!-- ✅ more radiant headline -->
+        <h1 class="title radiant glitch" data-text="GHOST SIGNAL">GHOST SIGNAL</h1>
+
+        <p class="subtitle">
+          You are a <b>Signal Hunter</b>. Reconstruct the <b>Master Manifest</b> by solving fragments.
+        </p>
+      </div>
+
+      <div class="mission" id="mission">
+        <div class="mission-title">HOW IT WORKS</div>
+        <ol class="mission-steps">
+          <li>Press <b>SCAN</b> → system selects <b>one random fragment</b>.</li>
+          <li>Click the fragment → it synthesizes in RAM.</li>
+          <li>Solve → unlocks a hidden terminal fragment.</li>
+          <li>Then it auto-loads the <b>next random unsolved</b> fragment (this session).</li>
+        </ol>
+      </div>
+
+      <div class="controls">
+        <div class="input-wrap">
+          <label class="sr-only" for="keyInput">Key</label>
+          <input id="keyInput" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 placeholder="type 0x... key OR paste enc:v1 fragment to decrypt" />
+        </div>
+        <button id="unlockBtn" class="btn primary" type="button"><span class="dot"></span> UNLOCK</button>
+      </div>
+
+      <div class="actions">
+        <button id="helpBtn" class="btn ghost" type="button">HELP</button>
+        <button id="clearBtn" class="btn ghost" type="button">CLEAR</button>
+      </div>
+
+      <div class="status-row">
+        <div id="status" class="status" aria-live="polite"></div>
+        <div class="live"><span class="pulse"></span> LIVE</div>
+      </div>
+
+      <!-- ✅ Terminal framed + scroll + newest -->
+      <div class="terminal-frame" aria-label="Terminal Output">
+        <div class="terminal-head">
+          <div class="terminal-title">TERMINAL STREAM</div>
+          <button id="streamTopBtn" class="stream-top-btn" type="button" aria-label="Scroll to newest">↑ NEWEST</button>
+        </div>
+        <div class="stream" id="voidStream" aria-live="polite"></div>
+      </div>
+
+      <footer class="footer">
+        <div class="tiny">⚠️ Puzzle vault. Don’t use for harm.</div>
+        <div class="tiny muted">© MyrqAI</div>
+      </footer>
+    </section>
+
+    <div id="onboarding" class="modal" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-title">The Myrq Protocol</div>
+        <div class="modal-text">
+          <p><b>Loop:</b> Scan → One Fragment → Synthesize → Solve → Unlock → Next Random.</p>
+          <p><b>Progress:</b> Synchronicity reads URL flags like <code>solved_0x100=1</code>.</p>
+          <p class="muted tiny">Auto-closes in <span id="obTimer">10</span>s.</p>
+        </div>
+        <div class="modal-actions">
+          <button id="closeOnboarding" class="btn primary" type="button">ENTER TERMINAL</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="puzzleModal" class="modal" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-title" id="puzTitle">Signal</div>
+        <div class="modal-text">
+          <div class="tiny muted" id="puzMeta"></div>
+          <p id="puzPrompt"></p>
+          <textarea id="puzPayload" class="ta" rows="3" readonly></textarea>
+          <input id="puzAnswer" class="pw" placeholder="enter answer" />
+        </div>
+        <div class="modal-actions">
+          <button id="puzSolve" class="btn primary" type="button">SOLVE</button>
+          <button id="puzClose" class="btn ghost" type="button">CLOSE</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    window.__PUZZLES_URL__ = "./puzzles.master.json";
+    window.__BG_IMAGE__ = "./assets/logo.gif";
+
+    (function () {
+      const url = window.__BG_IMAGE__;
+      if (!url) return;
+
+      const img = new Image();
+      img.onload = () => {
+        document.documentElement.style.setProperty("--bg-image", `url("${url}")`);
+        document.body.classList.add("bg-ready");
+      };
+      img.onerror = () => console.warn("[BG] failed:", url);
+      img.src = url;
+    })();
+  </script>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
