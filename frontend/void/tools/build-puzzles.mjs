@@ -21,7 +21,10 @@ function mustHave(x, name) {
   if (!x) throw new Error(`Missing required field: ${name}`);
 }
 
-const blueprint = JSON.parse(fs.readFileSync(blueprintPath, "utf8"));
+import { parse } from "jsonc-parser";
+
+const blueprintText = fs.readFileSync(blueprintPath, "utf8");
+const blueprint = parse(blueprintText);
 if (!Array.isArray(blueprint)) throw new Error("Blueprint must be an array.");
 
 const out = blueprint.map((b, idx) => {

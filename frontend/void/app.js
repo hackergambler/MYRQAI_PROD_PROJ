@@ -1,15 +1,12 @@
-// app.js (SESSION RANDOM SINGLE-FRAGMENT GAME LOOP) — ARCHITECTURE FIX (ENGINE-DRIVEN FAIL STAGES)
-// ✅ DOM-safe boot
-// ✅ Engine-driven fail stages (works even if vaultReject() returns nothing)
-// ✅ Modal UX reacts to stage: DENIED / ALERT / HINT / DESTABILIZE / LOCKOUT
-// ✅ No reset-on-open (keeps 3-fail hint progression alive)
-// ✅ Wrong answers: modal feedback + shake; close ONLY on LOCKOUT
-// ✅ Success: reset counter + unlock + next fragment
-// ✅ Anti-bruteforce: LOCKOUT at 20 wrong attempts => session terminated + solved lost + URL cleared
-// ✅ HELP button works (prints user guide in terminal)
-// ✅ Menu "How it works" opens a real user manual modal explaining UNLOCK purpose
-// ✅ Background loader intact
-// ✅ No repeats within session, auto-next on solve
+// app.js (SESSION RANDOM SINGLE-FRAGMENT GAME LOOP) — ENGINE + PROGRESSION (LOCAL VAULT) + OPTION A LOGS UI
+// ✅ Persistent progression (localStorage via vault-engine.js)
+// ✅ Session-random gameplay loop (1 fragment at a time)
+// ✅ Phase Gates enforced (won’t pick locked signals)
+// ✅ Synchronicity meter reflects REAL progress (solvedCount / total)
+// ✅ URL solved_* flags kept only as cosmetic/share
+// ✅ Clear Progress clears session + URL + local progression
+// ✅ Option A: Recovered Logs panel + Log Modal (click entry to open + copy)
+// ✅ Completion FX overlay (no HTML changes required): triggers at 100 fragments
 
 import {
   initVoidUI,
@@ -23,12 +20,20 @@ import {
   jumpToNewest,
   vaultReject,
   resetRejectCounter,
+
+  // progression + logs (from updated vault-engine.js)
+  getProgress,
+  onSolveSuccess,
+  isSignalUnlocked,
+  resetProgress,
+  getVaultLog,
+  clearVaultLog, // ✅ REQUIRED (your previous code was incorrectly using resetProgress for log clear)
 } from "./vault-engine.js";
 
 const PUZZLES_URL = window.__PUZZLES_URL__ || "./puzzles.master.json";
 const BASE_VAULT_IMG = "./assets/void.png";
 
-// session keys
+// session keys (still used for “no repeats within session”)
 const S_SEEN = "myrq_seen_signals";
 const S_SOLVED = "myrq_solved_signals";
 
@@ -42,8 +47,11 @@ let synthesizedFor = null;
 let scanning = false;
 let solving = false;
 
+// completion FX guard
+let COMPLETION_FIRED = false;
+
 /* =======================
-   HELP + USER MANUAL (NEW)
+   HELP + USER MANUAL
    ======================= */
 const HELP_TERMINAL_TEXT =
   "⟡ HELP // GHOST SIGNAL\n\n" +
@@ -57,9 +65,9 @@ const HELP_TERMINAL_TEXT =
   "• It works after a Signal Card is clicked (because the vault must be loaded).\n" +
   "• You can type a key like 0x163 to reveal its fragment.\n" +
   "• Or paste an encrypted fragment like enc:v1:... to decrypt (you’ll be asked a passphrase).\n\n" +
-  "Errors:\n" +
-  "• 'Vault not ready' → click a fragment first.\n" +
-  "• 'No fragment for key' → that key isn’t in the loaded vault.\n";
+  "Progress:\n" +
+  "• Progress is stored locally (your browser), not on the server.\n" +
+  "• Rank + Phase Gates unlock more signals as fragments rise.\n";
 
 function userManualHTML() {
   return `
@@ -70,34 +78,33 @@ function userManualHTML() {
     <hr style="border:0;border-top:1px solid rgba(0,255,156,.14);margin:12px 0" />
 
     <p><b>SCAN</b><br/>
-    Picks <b>one random Signal Fragment</b> for this session.</p>
+    Picks <b>one random Signal Fragment</b> for this session (from what your clearance allows).</p>
 
     <p><b>Click the Fragment</b><br/>
     Clicking a fragment <b>synthesizes the vault in RAM</b> (not uploaded). This is what makes UNLOCK work.</p>
 
     <p><b>SOLVE</b><br/>
-    You answer the question. If correct, the system unlocks the terminal fragment and selects the next unsolved signal.</p>
+    If correct, the system verifies your answer, stores progress locally, and unlocks the terminal fragment + vault log entry.</p>
 
-    <p><b>UNLOCK (what users get)</b><br/>
+    <p><b>UNLOCK</b><br/>
     UNLOCK reveals hidden fragments by key. It accepts:</p>
     <ul style="margin:8px 0 0 18px">
       <li><code>0x...</code> key (example: <code>0x163</code>)</li>
       <li><code>enc:v1:...</code> encrypted fragment (asks passphrase)</li>
     </ul>
 
+    <p><b>Rewards</b><br/>
+    You gain <b>Fragments</b> (progress), <b>Rank</b> (clearance), and an archived <b>Vault Log</b> of recovered intel.</p>
+
     <p class="muted tiny" style="margin-top:10px">
       If UNLOCK says <b>Vault not ready</b>, you haven’t clicked a Signal yet.<br/>
       If UNLOCK says <b>No fragment for key</b>, that key is not inside the currently loaded vault.
-    </p>
-
-    <p class="muted tiny" style="margin-top:10px">
-      <b>Progress:</b> Synchronicity reads URL flags like <code>?solved_0x100=1</code>.
     </p>
   `;
 }
 
 /* =======================
-   Onboarding modal (used as User Manual)
+   Onboarding modal (User Manual)
    ======================= */
 let onboardingTimer = null;
 
@@ -142,14 +149,12 @@ function openUserManual() {
     t--;
     const te = els.onboarding.querySelector("#obTimer");
     if (te) te.textContent = String(Math.max(t, 0));
-    if (t <= 0) {
-      closeOnboarding();
-    }
+    if (t <= 0) closeOnboarding();
   }, 1000);
 }
 
 /* =======================
-   Modal feedback (puzzle modal)
+   Puzzle modal feedback
    ======================= */
 let modalMsgEl = null;
 let modalCloseTimer = null;
@@ -175,7 +180,6 @@ function ensureModalMsgEl() {
   msg.style.display = "none";
   msg.style.userSelect = "none";
 
-  // default "bad"
   msg.style.border = "1px solid rgba(255,45,109,.35)";
   msg.style.background = "rgba(255,45,109,.10)";
   msg.style.color = "rgba(255,230,240,.92)";
@@ -231,9 +235,7 @@ function scheduleClosePuzzle(ms = 650) {
    Utils
    ======================= */
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (m) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]
-  ));
+  return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 }
 function normalizeAnswer(s) {
   return String(s || "").trim().toUpperCase();
@@ -262,7 +264,9 @@ function readSet(key) {
   }
 }
 function writeSet(key, set) {
-  try { sessionStorage.setItem(key, JSON.stringify([...set])); } catch {}
+  try {
+    sessionStorage.setItem(key, JSON.stringify([...set]));
+  } catch {}
 }
 function getSessionSeen() { return readSet(S_SEEN); }
 function getSessionSolved() { return readSet(S_SOLVED); }
@@ -285,7 +289,8 @@ const Sound = (() => {
     o.type = "sine";
     o.frequency.value = freq;
     g.gain.value = gain;
-    o.connect(g); g.connect(ac.destination);
+    o.connect(g);
+    g.connect(ac.destination);
     o.start();
     o.stop(ac.currentTime + dur);
   };
@@ -293,12 +298,12 @@ const Sound = (() => {
   return {
     toggle() { on = !on; return on; },
     tick(type) {
-      if (type === "ok") { beep(740, .05, .06); setTimeout(() => beep(980, .05, .04), 60); }
-      else if (type === "bad") { beep(220, .08, .06); }
-      else if (type === "rare") { beep(520, .05, .05); setTimeout(() => beep(1040, .09, .06), 60); }
-      else if (type === "sys") { beep(440, .04, .03); }
-      else if (type === "warn") { beep(330, .06, .05); }
-    }
+      if (type === "ok") { beep(740, 0.05, 0.06); setTimeout(() => beep(980, 0.05, 0.04), 60); }
+      else if (type === "bad") { beep(220, 0.08, 0.06); }
+      else if (type === "rare") { beep(520, 0.05, 0.05); setTimeout(() => beep(1040, 0.09, 0.06), 60); }
+      else if (type === "sys") { beep(440, 0.04, 0.03); }
+      else if (type === "warn") { beep(330, 0.06, 0.05); }
+    },
   };
 })();
 
@@ -329,21 +334,22 @@ function loadBackground(url, fallbackUrl = "") {
 }
 
 /* =======================
-   Synchronicity meter
+   Synchronicity meter (REAL PROGRESS)
    ======================= */
 function setMeter() {
-  const params = new URLSearchParams(location.search);
-  const solved = PUZZLES.filter(p => params.get("solved_" + p.signal_id) === "1").length;
+  const p = getProgress?.() || { solvedCount: 0 };
   const total = Math.max(PUZZLES.length, 1);
-  const pct = Math.round((solved / total) * 100);
+  const pct = Math.round((Math.min(p.solvedCount || 0, total) / total) * 100);
+
   if (els.syncPct) els.syncPct.textContent = String(pct);
   if (els.syncFill) els.syncFill.style.width = pct + "%";
 }
+
+/* Cosmetic URL flags only */
 function markSolvedUrl(signal_id) {
   const url = new URL(location.href);
   url.searchParams.set("solved_" + signal_id, "1");
   history.replaceState({}, "", url.toString());
-  setMeter();
 }
 function clearSolvedUrlFlags() {
   const url = new URL(location.href);
@@ -358,7 +364,7 @@ function clearSolvedUrlFlags() {
 let jitterClassTimer = null;
 function clearJitterClasses() {
   const el = document.body;
-  [...el.classList].forEach(c => { if (c.startsWith("signal-jitter-")) el.classList.remove(c); });
+  [...el.classList].forEach((c) => { if (c.startsWith("signal-jitter-")) el.classList.remove(c); });
 }
 function difficultyJitter(level = 1) {
   clearTimeout(jitterClassTimer);
@@ -395,15 +401,28 @@ async function verifyAnswer(sig, answerRaw) {
 }
 
 /* =======================
-   Random single fragment selection
+   Random single fragment selection (CLEARANCE + UNSOLVED)
    ======================= */
-function isUrlSolved(sigId) {
-  const params = new URLSearchParams(location.search);
-  return params.get("solved_" + sigId) === "1";
+function isGloballySolved(sigId) {
+  const p = getProgress?.();
+  const solved = p?.solved || {};
+  return Boolean(solved[String(sigId || "").toUpperCase()]);
 }
+
 function pickRandomUnsolved() {
   const sessionSolved = getSessionSolved();
-  const pool = PUZZLES.filter(p => !isUrlSolved(p.signal_id) && !sessionSolved.has(p.signal_id));
+
+  const pool = PUZZLES.filter((p) => {
+    if (!p?.signal_id) return false;
+    if (isGloballySolved(p.signal_id)) return false;
+    if (sessionSolved.has(p.signal_id)) return false;
+
+    const idx = Number(p.__index) || 1;
+    if (!isSignalUnlocked?.(idx)) return false;
+
+    return true;
+  });
+
   if (pool.length === 0) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -412,10 +431,13 @@ function renderSingleSignal(sig) {
   if (!els.signals) return;
 
   if (!sig) {
+    const p = getProgress?.() || {};
     els.signals.innerHTML = `
       <div class="side-text muted tiny">
-        No unsolved fragments available (this session).<br/>
-        Reset progress or start a new session.
+        No available fragments right now.<br/>
+        Either you solved them, or your clearance gate is locked.<br/><br/>
+        <b>Fragments:</b> ${escapeHtml(String(p.fragments ?? 0))}/100<br/>
+        <b>Rank:</b> ${escapeHtml(String(p.rank ?? "UNKNOWN"))}
       </div>
     `;
     return;
@@ -446,6 +468,408 @@ function renderSingleSignal(sig) {
 }
 
 /* =======================
+   Option A: Recovered Logs UI
+   ======================= */
+function safeDate(ts) {
+  if (!ts) return "";
+  // vault-engine stores ISO string by default; support numeric too
+  try { return new Date(ts).toLocaleString(); } catch { return ""; }
+}
+
+function clip(s, n) {
+  const t = String(s ?? "");
+  if (t.length <= n) return t;
+  return t.slice(0, n) + "…";
+}
+
+function getLogArray() {
+  try {
+    const log = getVaultLog?.();
+    return Array.isArray(log) ? log : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderVaultLog() {
+  if (!els.vaultLogList || !els.vaultLogCount) return;
+
+  const log = getLogArray(); // engine already returns newest-first (unshift)
+  els.vaultLogCount.textContent = String(log.length);
+
+  if (log.length === 0) {
+    els.vaultLogList.innerHTML = `
+      <div class="vaultlog-empty">
+        No logs recovered yet.<br/>
+        Solve a signal to extract a vault entry.
+      </div>
+    `;
+    return;
+  }
+
+  // Keep engine order (newest first) to match UI expectation
+  els.vaultLogList.innerHTML = log
+    .map((e, i) => {
+      const id = escapeHtml(e.signal_id || "0x???");
+      const when = escapeHtml(safeDate(e.ts));
+      const title = escapeHtml(e.title || "Recovered Entry");
+      const body = escapeHtml(clip(e.text || "", 140));
+      return `
+        <div class="vaultlog-item" data-log-idx="${i}" role="button" tabindex="0" aria-label="Open log ${id}">
+          <div class="vaultlog-row">
+            <div class="vaultlog-id">${id}</div>
+            <div class="vaultlog-time">${when}</div>
+          </div>
+          <div class="vaultlog-name">${title}</div>
+          <div class="vaultlog-preview">${body}</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function openLogModal(entry) {
+  if (!els.logModal || !els.logBody || !els.logTitle || !els.logMeta) return;
+
+  const sid = String(entry?.signal_id || "0x???").toUpperCase();
+  const ttl = String(entry?.title || "Recovered Log");
+  const when = safeDate(entry?.ts);
+  const ttype = entry?.transmission_type ? String(entry.transmission_type).toUpperCase() : "";
+  const diff = entry?.difficulty != null ? String(entry.difficulty) : "";
+  const text = String(entry?.text || "").trim() || "(empty)";
+
+  els.logTitle.textContent = ttl;
+  els.logMeta.innerHTML =
+    `${when ? `TIME <code>${escapeHtml(when)}</code> ` : ""}` +
+    `ID <code>${escapeHtml(sid)}</code>` +
+    `${ttype ? ` • TYPE <code>${escapeHtml(ttype)}</code>` : ""}` +
+    `${diff ? ` • DIFF <code>${escapeHtml(diff)}</code>` : ""}`;
+
+  els.logBody.textContent = text;
+
+  els.logModal.classList.add("show");
+  els.logModal.setAttribute("aria-hidden", "false");
+
+  // also print into terminal stream (nice hacker feel)
+  revealDirectHint(`⟡ RECOVERED LOG OPENED\nID: ${sid}\n${when ? `TIME: ${when}\n` : ""}\n${text}`, {
+    mode: "SYSTEM",
+    key: "LOG",
+    rare: true,
+  });
+  jumpToNewest?.();
+}
+
+function closeLogModal() {
+  if (!els.logModal) return;
+  els.logModal.classList.remove("show");
+  els.logModal.setAttribute("aria-hidden", "true");
+}
+
+async function copyLogText() {
+  const t = els.logBody?.textContent || "";
+  if (!t) return;
+  try {
+    await navigator.clipboard.writeText(t);
+    setStatus("log copied");
+    Sound.tick("sys");
+  } catch {
+    prompt("Copy log:", t);
+  }
+}
+
+function wireVaultLogUI() {
+  renderVaultLog();
+
+  els.vaultLogRefresh?.addEventListener("click", () => {
+    renderVaultLog();
+    setStatus("log refreshed");
+    Sound.tick("sys");
+  });
+
+  // ✅ FIX: clear ONLY the log (not full reset)
+  els.vaultLogClear?.addEventListener("click", () => {
+    const ok = typeof window.confirm === "function" ? confirm("Clear recovered logs? (Progress stays)") : true;
+    if (!ok) return;
+
+    try {
+      clearVaultLog?.();
+    } catch {
+      // If engine missing, fail gracefully
+      setStatus("log clear failed");
+      Sound.tick("bad");
+      return;
+    }
+
+    renderVaultLog();
+    setStatus("log cleared");
+    Sound.tick("warn");
+  });
+
+  // open entry click (event delegation)
+  els.vaultLogList?.addEventListener("click", (e) => {
+    const item = e.target?.closest?.(".vaultlog-item");
+    if (!item) return;
+
+    const idx = Number(item.getAttribute("data-log-idx"));
+    const list = getLogArray(); // same order as render
+    const entry = list[idx];
+    if (entry) openLogModal(entry);
+  });
+
+  els.vaultLogList?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const item = e.target?.closest?.(".vaultlog-item");
+    if (!item) return;
+    const idx = Number(item.getAttribute("data-log-idx"));
+    const list = getLogArray();
+    const entry = list[idx];
+    if (entry) openLogModal(entry);
+  });
+
+  // modal controls
+  els.logClose?.addEventListener("click", closeLogModal);
+  els.logCopy?.addEventListener("click", copyLogText);
+  els.logModal?.addEventListener("click", (e) => {
+    if (e.target === els.logModal) closeLogModal();
+  });
+}
+
+/* =======================
+   Completion FX (overlay + pulses)
+   ======================= */
+function injectCompletionStylesOnce() {
+  if (document.getElementById("completionFxStyles")) return;
+
+  const st = document.createElement("style");
+  st.id = "completionFxStyles";
+  st.textContent = `
+  .completion-overlay{
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background:
+      radial-gradient(900px 520px at 50% 40%, rgba(0,255,156,.18), rgba(0,0,0,.86) 62%),
+      linear-gradient(180deg, rgba(0,0,0,.60), rgba(0,0,0,.92));
+    backdrop-filter: blur(10px);
+    animation: compIn 420ms ease-out both;
+  }
+  @keyframes compIn{
+    from{ opacity:0; transform: scale(.98); }
+    to{ opacity:1; transform: scale(1); }
+  }
+  .completion-card{
+    width: min(860px, 94vw);
+    border-radius: 24px;
+    border: 1px solid rgba(0,255,156,.24);
+    background: rgba(0,0,0,.45);
+    box-shadow: 0 30px 80px rgba(0,0,0,.65);
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .completion-card::before{
+    content:"";
+    position:absolute;
+    inset:-20%;
+    background:
+      radial-gradient(40% 30% at 30% 30%, rgba(0,255,156,.28), transparent 60%),
+      radial-gradient(40% 30% at 70% 60%, rgba(170,80,255,.18), transparent 62%),
+      radial-gradient(35% 28% at 60% 25%, rgba(0,120,255,.14), transparent 62%);
+    filter: blur(18px);
+    opacity:.75;
+    animation: compDrift 7.5s ease-in-out infinite;
+  }
+  @keyframes compDrift{
+    0%{ transform: translate3d(-1.2%, -0.8%, 0) scale(1.02); }
+    50%{ transform: translate3d( 1.0%,  0.6%, 0) scale(1.03); }
+    100%{ transform: translate3d(-1.2%, -0.8%, 0) scale(1.02); }
+  }
+  .completion-inner{
+    position: relative;
+    z-index: 2;
+    display:flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .completion-title{
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: rgba(225,255,245,.96);
+  }
+  .completion-sub{
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: .10em;
+    color: rgba(225,255,245,.70);
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+  .completion-code{
+    margin-top: 6px;
+    font-size: 14px;
+    letter-spacing: .18em;
+    font-weight: 900;
+    color: rgba(0,255,156,.92);
+    padding: 12px 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(0,255,156,.22);
+    background: rgba(0,0,0,.35);
+    display:flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .completion-actions{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content:flex-end;
+    margin-top: 6px;
+  }
+  .completion-btn{
+    border-radius: 16px;
+    border: 1px solid rgba(0,255,156,.22);
+    background: rgba(0,0,0,.24);
+    color: rgba(225,255,245,.92);
+    padding: 12px 14px;
+    letter-spacing: .12em;
+    font-weight: 900;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .completion-btn.primary{
+    background: linear-gradient(180deg, rgba(0,255,156,.18), rgba(0,0,0,.18));
+    border-color: rgba(0,255,156,.35);
+  }
+  .completion-btn:hover{ transform: translateY(-1px); }
+  `;
+  document.head.appendChild(st);
+}
+
+async function showCompletionFX() {
+  if (COMPLETION_FIRED) return;
+  COMPLETION_FIRED = true;
+
+  injectCompletionStylesOnce();
+
+  const p = getProgress?.() || {};
+  const rank = p.rank || "PROTOCOL COMPLETE";
+  const code = "PROOF: " + (p.fragments >= 100 ? "VAULT_OPEN" : "UNKNOWN");
+
+  const overlay = document.createElement("div");
+  overlay.className = "completion-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+
+  const card = document.createElement("div");
+  card.className = "completion-card";
+
+  const inner = document.createElement("div");
+  inner.className = "completion-inner";
+
+  const title = document.createElement("h2");
+  title.className = "completion-title";
+  title.textContent = "VAULT OPEN • PROTOCOL COMPLETE";
+
+  const sub = document.createElement("p");
+  sub.className = "completion-sub";
+  sub.textContent =
+    "All fragments recovered.\n" +
+    `RANK: ${rank}\n` +
+    "Screenshot this screen as proof.";
+
+  const codeRow = document.createElement("div");
+  codeRow.className = "completion-code";
+
+  const left = document.createElement("div");
+  left.textContent = "CLEARANCE CARD";
+
+  const right = document.createElement("div");
+  right.style.display = "flex";
+  right.style.gap = "10px";
+  right.style.alignItems = "center";
+  right.style.flexWrap = "wrap";
+
+  const codeEl = document.createElement("span");
+  // If vault-engine already prints deterministic code in terminal, you can paste it manually.
+  // Here we still show a simple badge; your engine has the real VAULT-XXXXXXXX code in terminal.
+  codeEl.textContent = code;
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "completion-btn";
+  copyBtn.type = "button";
+  copyBtn.textContent = "COPY";
+  copyBtn.addEventListener("click", async () => {
+    const t = `${title.textContent}\nRANK: ${rank}\n${code}`;
+    try {
+      await navigator.clipboard.writeText(t);
+      setStatus("completion copied");
+      Sound.tick("sys");
+    } catch {
+      prompt("Copy:", t);
+    }
+  });
+
+  right.appendChild(codeEl);
+  right.appendChild(copyBtn);
+
+  codeRow.appendChild(left);
+  codeRow.appendChild(right);
+
+  const actions = document.createElement("div");
+  actions.className = "completion-actions";
+
+  const close = document.createElement("button");
+  close.className = "completion-btn primary";
+  close.type = "button";
+  close.textContent = "RETURN TO TERMINAL";
+  close.addEventListener("click", () => overlay.remove());
+
+  const reset = document.createElement("button");
+  reset.className = "completion-btn";
+  reset.type = "button";
+  reset.textContent = "RESET PROGRESS";
+  reset.addEventListener("click", () => {
+    overlay.remove();
+    // trigger the same behavior as menu reset
+    els.clearProgress?.click?.();
+  });
+
+  actions.appendChild(reset);
+  actions.appendChild(close);
+
+  inner.appendChild(title);
+  inner.appendChild(sub);
+  inner.appendChild(codeRow);
+  inner.appendChild(actions);
+
+  card.appendChild(inner);
+  overlay.appendChild(card);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+
+  // extra feel
+  Sound.tick("rare");
+  document.body.classList.add("vault-hit-2");
+  setTimeout(() => document.body.classList.remove("vault-hit-2"), 360);
+}
+
+function maybeTriggerCompletionFX() {
+  const p = getProgress?.() || {};
+  if ((p.fragments || 0) >= 100) showCompletionFX();
+}
+
+/* =======================
    Scan
    ======================= */
 async function scanForSignals() {
@@ -471,9 +895,14 @@ async function scanForSignals() {
     }
 
     parsed.sort((a, b) => parseHexIdToInt(a.signal_id) - parseHexIdToInt(b.signal_id));
+
+    // assign 1..N index for Phase Gates
+    parsed.forEach((p, i) => (p.__index = i + 1));
     PUZZLES = parsed;
 
     setMeter();
+    renderVaultLog();
+
     setStatus(`signals loaded (${PUZZLES.length})`);
     Sound.tick("sys");
 
@@ -481,17 +910,33 @@ async function scanForSignals() {
     if (chosen) {
       markSessionSeen(chosen.signal_id);
       renderSingleSignal(chosen);
-      revealDirectHint("⟡ SCAN COMPLETE.\nOne fragment has been selected for this session.", { mode: "SYSTEM", key: "SCAN", rare: true });
+
+      const prog = getProgress?.() || {};
+      revealDirectHint(
+        "⟡ SCAN COMPLETE.\nOne fragment has been selected.\n" +
+          `⟡ Rank: ${prog.rank || "UNKNOWN"}\n` +
+          `⟡ Fragments: ${prog.fragments || 0}/100`,
+        { mode: "SYSTEM", key: "SCAN", rare: true }
+      );
       jumpToNewest?.();
     } else {
       renderSingleSignal(null);
-      revealDirectHint("⟡ NO NEW FRAGMENTS.\nAll available fragments are solved (or solved this session).", { mode: "SYSTEM", key: "SCAN" });
+      revealDirectHint(
+        "⟡ NO AVAILABLE FRAGMENTS.\nEither all are solved, or clearance gates are locked.\nSolve more to raise rank.",
+        { mode: "SYSTEM", key: "SCAN" }
+      );
       jumpToNewest?.();
     }
+
+    // if user already completed earlier, show FX once
+    maybeTriggerCompletionFX();
   } catch (e) {
     const msg = e?.message || "scan failed";
     setStatus("scan failed");
-    showSignalsHelper("SCAN failed: " + msg, `Open directly: <code>${escapeHtml(new URL(PUZZLES_URL, location.href).toString())}</code>`);
+    showSignalsHelper(
+      "SCAN failed: " + msg,
+      `Open directly: <code>${escapeHtml(new URL(PUZZLES_URL, location.href).toString())}</code>`
+    );
     revealDirectHint("🜏 SCAN FAILED.\nEnsure puzzles.master.json exists and is served.", { mode: "SYSTEM", key: "SCAN" });
     Sound.tick("bad");
   } finally {
@@ -504,9 +949,6 @@ async function scanForSignals() {
    ======================= */
 async function openSignal(sig) {
   active = sig;
-
-  // DO NOT reset reject counter on open (keep hint progression)
-  // resetRejectCounter(sig.signal_id);
 
   clearTimeout(modalCloseTimer);
   clearModalMessage();
@@ -538,28 +980,27 @@ async function openSignal(sig) {
   if (!els.puzzleModal) return;
 
   els.puzTitle && (els.puzTitle.textContent = sig.title || sig.signal_id);
-  els.puzMeta && (els.puzMeta.textContent =
-    `Signal: ${sig.signal_id} • ${sig.transmission_type || "SIGNAL"} • Difficulty ${sig.difficulty || 1}`);
+  els.puzMeta &&
+    (els.puzMeta.textContent = `Signal: ${sig.signal_id} • ${sig.transmission_type || "SIGNAL"} • Difficulty ${sig.difficulty || 1}`);
   els.puzPrompt && (els.puzPrompt.textContent = sig.prompt ? String(sig.prompt) : "Solve the signal.");
   if (els.puzPayload) els.puzPayload.value = "";
   if (els.puzAnswer) els.puzAnswer.value = "";
 
   els.puzzleModal.classList.add("show");
+  els.puzzleModal.setAttribute("aria-hidden", "false");
   els.puzAnswer?.focus?.();
 }
 
 function closePuzzle() {
   clearTimeout(modalCloseTimer);
   els.puzzleModal?.classList.remove("show");
+  els.puzzleModal?.setAttribute?.("aria-hidden", "true");
   clearModalMessage();
   active = null;
 }
 
 /* =======================
-   Engine-driven fail state adapter
-   - If vaultReject() returns {count, stage, snippet}, we use it.
-   - If it returns nothing, we compute stages locally
-     while still calling engine for terminal output.
+   Engine-driven fail adapter
    ======================= */
 const LOCAL_FAIL = new Map(); // signalId -> count
 
@@ -569,7 +1010,6 @@ function localBump(signalId) {
   LOCAL_FAIL.set(k, n);
   return n;
 }
-
 function localReset(signalId) {
   const k = String(signalId || "UNKNOWN").toUpperCase();
   LOCAL_FAIL.delete(k);
@@ -588,11 +1028,8 @@ function deriveStageAndSnippet(count, sig) {
 
 function rejectInfo(signalId, difficulty, sig) {
   let info;
-  try {
-    info = vaultReject(signalId, difficulty);
-  } catch {
-    info = null;
-  }
+  try { info = vaultReject(signalId, difficulty); }
+  catch { info = null; }
 
   if (info && typeof info === "object") {
     const count = Number(info.count || 1);
@@ -610,6 +1047,7 @@ function rejectInfo(signalId, difficulty, sig) {
    Lockout termination
    ======================= */
 function terminateSession(signalId) {
+  // session-only wipe (DO NOT wipe local progression here)
   clearSolvedUrlFlags();
 
   try {
@@ -626,11 +1064,11 @@ function terminateSession(signalId) {
   setPhase("LOCKOUT");
 
   revealDirectHint(
-`⚠ BRUTE FORCE DETECTED
+    `⚠ BRUTE FORCE DETECTED
 ${LOCKOUT_AFTER} failed attempts recorded.
 
 SESSION TERMINATED.
-Solved fragments lost.
+Session progress lost.
 
 Scan again to continue.`,
     { mode: "SYSTEM", key: "LOCKOUT", rare: true }
@@ -641,7 +1079,7 @@ Scan again to continue.`,
 }
 
 /* =======================
-   Engine-driven modal UX
+   Modal UX text for reject
    ======================= */
 function modalMessageFromReject(rej) {
   const n = rej?.count ?? 1;
@@ -676,7 +1114,8 @@ async function solveActive() {
     }
 
     let ok = false;
-    try { ok = await verifyAnswer(active, ans); } catch { ok = false; }
+    try { ok = await verifyAnswer(active, ans); }
+    catch { ok = false; }
 
     if (!ok) {
       const rej = rejectInfo(active.signal_id, active.difficulty || 1, active);
@@ -700,23 +1139,50 @@ async function solveActive() {
     localReset(active.signal_id);
     resetRejectCounter?.(active.signal_id);
 
-    showModalMessage("ACCEPTED • FRAGMENT UNLOCKED", "ok");
+    showModalMessage("ACCEPTED • VERIFIED", "ok");
 
+    // Persist progression + vault log (localStorage)
+    try {
+      onSolveSuccess?.({
+        signal_id: active.signal_id,
+        title: active.title,
+        transmission_type: active.transmission_type,
+        difficulty: active.difficulty,
+        secret_payload: active.secret_payload,
+        unlock_fragment: active.unlock_fragment,
+      });
+    } catch {}
+
+    // Cosmetic URL flag (optional)
     markSolvedUrl(active.signal_id);
+
+    // Session tracking
     markSessionSolved(active.signal_id);
+
+    // Update UI progress + logs
+    setMeter();
+    renderVaultLog();
 
     setStatus("unlocked");
     Sound.tick("rare");
 
+    // Reveal fragment in terminal using existing pipeline
     unlockHintByKey(active.signal_id);
 
-    revealDirectHint("⟡ SOLVED: " + (active.title || active.signal_id), { mode: "SYSTEM", key: "SOLVED", rare: true });
+    const p = getProgress?.() || {};
+    revealDirectHint(
+      "⟡ SOLVED: " + (active.title || active.signal_id) + "\n" + `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${p.fragments || 0}/100`,
+      { mode: "SYSTEM", key: "SOLVED", rare: true }
+    );
     if (active.unlock_fragment) {
       revealDirectHint("⟡ " + active.unlock_fragment, { mode: "SYSTEM", key: active.signal_id, rare: true });
     }
 
     scheduleClosePuzzle(520);
     jumpToNewest?.();
+
+    // ✅ Completion FX
+    maybeTriggerCompletionFX();
 
     const next = pickRandomUnsolved();
     if (next) {
@@ -726,7 +1192,10 @@ async function solveActive() {
       jumpToNewest?.();
     } else {
       renderSingleSignal(null);
-      revealDirectHint("⟡ SESSION COMPLETE.\nNo unsolved fragments remain (this session).", { mode: "SYSTEM", key: "DONE", rare: true });
+      revealDirectHint(
+        "⟡ NO AVAILABLE FRAGMENTS.\nEither all are solved, or clearance gates are locked.\nSolve more to raise rank.",
+        { mode: "SYSTEM", key: "DONE", rare: true }
+      );
       jumpToNewest?.();
     }
   } finally {
@@ -780,7 +1249,19 @@ function wireUI() {
 
     onboarding: document.getElementById("onboarding"),
     closeOnboarding: document.getElementById("closeOnboarding"),
-    obTimer: document.getElementById("obTimer"),
+
+    // ✅ Option A log UI
+    vaultLogList: document.getElementById("vaultLogList"),
+    vaultLogCount: document.getElementById("vaultLogCount"),
+    vaultLogRefresh: document.getElementById("vaultLogRefresh"),
+    vaultLogClear: document.getElementById("vaultLogClear"),
+
+    logModal: document.getElementById("logModal"),
+    logTitle: document.getElementById("logTitle"),
+    logMeta: document.getElementById("logMeta"),
+    logBody: document.getElementById("logBody"),
+    logClose: document.getElementById("logClose"),
+    logCopy: document.getElementById("logCopy"),
   };
 
   initVoidUI(
@@ -795,6 +1276,13 @@ function wireUI() {
 
   if (els.urlLabel) els.urlLabel.textContent = PUZZLES_URL;
   loadBackground(window.__BG_IMAGE__, BASE_VAULT_IMG);
+
+  // initial meter + log UI from stored progress
+  setMeter();
+  wireVaultLogUI();
+
+  // if already completed from previous runs, show once
+  maybeTriggerCompletionFX();
 
   els.scanBtn?.addEventListener("click", () => scanForSignals());
 
@@ -812,9 +1300,19 @@ function wireUI() {
     if (e.key === "Enter") els.unlockBtn?.click?.();
   });
 
-  // ✅ HELP button now works (terminal guide)
+  // HELP
   els.helpBtn?.addEventListener("click", () => {
     revealDirectHint(HELP_TERMINAL_TEXT, { mode: "SYSTEM", key: "HELP", rare: true });
+
+    try {
+      const p = getProgress?.() || {};
+      const logCount = getLogArray().length;
+      revealDirectHint(
+        `⟡ LOCAL PROGRESS\nFragments: ${p.fragments || 0}/100\nRank: ${p.rank || "UNKNOWN"}\nVault Log: ${logCount}`,
+        { mode: "SYSTEM", key: "PROGRESS", rare: true }
+      );
+    } catch {}
+
     setStatus("help loaded");
     Sound.tick("sys");
     jumpToNewest?.();
@@ -826,7 +1324,7 @@ function wireUI() {
     Sound.tick("sys");
   });
 
-  // Modal controls
+  // Puzzle modal controls
   els.puzClose?.addEventListener("click", closePuzzle);
   els.puzzleModal?.addEventListener("click", (e) => {
     if (e.target === els.puzzleModal) closePuzzle();
@@ -846,7 +1344,6 @@ function wireUI() {
     toggleMenu();
   });
 
-  // ✅ Menu → How it works opens full manual explaining UNLOCK
   els.openOnboarding?.addEventListener("click", () => {
     toggleMenu(false);
     openUserManual();
@@ -865,6 +1362,7 @@ function wireUI() {
       toggleMenu(false);
       closePuzzle();
       closeOnboarding();
+      closeLogModal();
     }
   });
 
@@ -904,8 +1402,11 @@ function wireUI() {
     catch { prompt("Copy:", v); }
   });
 
-  // Clear progress
+  // Clear progress (clears local progression too)
   els.clearProgress?.addEventListener("click", () => {
+    const ok = typeof window.confirm === "function" ? confirm("Reset ALL progress and logs?") : true;
+    if (!ok) return;
+
     clearSolvedUrlFlags();
 
     try {
@@ -919,9 +1420,19 @@ function wireUI() {
       resetRejectCounter?.(active.signal_id);
     }
 
+    try { resetProgress?.(); } catch {}
+
+    // allow completion FX to fire again later
+    COMPLETION_FIRED = false;
+
     setMeter();
+    renderVaultLog();
     setStatus("progress reset");
-    revealDirectHint("⟡ PROGRESS RESET.\nScan again to get a new random fragment.", { mode: "SYSTEM", key: "RESET", rare: true });
+    revealDirectHint("⟡ PROGRESS RESET.\nLocal vault cleared.\nScan again to get a new random fragment.", {
+      mode: "SYSTEM",
+      key: "RESET",
+      rare: true,
+    });
     jumpToNewest?.();
     showSignalsHelper("Press SCAN to pull a fragment…");
   });
@@ -936,8 +1447,10 @@ async function boot() {
   wireUI();
   await scanForSignals();
 
+  const p = getProgress?.() || {};
   revealDirectHint(
-    "⟡ SIGNAL HUNTER ONLINE.\nSCAN picks one random fragment per session.\nSolve to unlock the next.",
+    "⟡ SIGNAL HUNTER ONLINE.\nSCAN picks one random fragment per session.\nSolve to unlock the next.\n\n" +
+      `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${p.fragments || 0}/100`,
     { mode: "SYSTEM", key: "BOOT", rare: true }
   );
   jumpToNewest?.();
