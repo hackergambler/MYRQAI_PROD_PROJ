@@ -6,6 +6,8 @@
 // ✅ Wrong answers: modal feedback + shake; close ONLY on LOCKOUT
 // ✅ Success: reset counter + unlock + next fragment
 // ✅ Anti-bruteforce: LOCKOUT at 20 wrong attempts => session terminated + solved lost + URL cleared
+// ✅ HELP button works (prints user guide in terminal)
+// ✅ Menu "How it works" opens a real user manual modal explaining UNLOCK purpose
 // ✅ Background loader intact
 // ✅ No repeats within session, auto-next on solve
 
@@ -41,7 +43,113 @@ let scanning = false;
 let solving = false;
 
 /* =======================
-   Modal feedback
+   HELP + USER MANUAL (NEW)
+   ======================= */
+const HELP_TERMINAL_TEXT =
+  "⟡ HELP // GHOST SIGNAL\n\n" +
+  "Core Loop:\n" +
+  "1) Press SCAN → system selects one random fragment.\n" +
+  "2) Click the fragment → the vault is synthesized in RAM.\n" +
+  "3) Solve → if correct, it reveals a hidden terminal fragment.\n" +
+  "4) Then it auto-selects the next unsolved fragment.\n\n" +
+  "UNLOCK (why this button exists):\n" +
+  "• UNLOCK is a decoder tool.\n" +
+  "• It works after a Signal Card is clicked (because the vault must be loaded).\n" +
+  "• You can type a key like 0x163 to reveal its fragment.\n" +
+  "• Or paste an encrypted fragment like enc:v1:... to decrypt (you’ll be asked a passphrase).\n\n" +
+  "Errors:\n" +
+  "• 'Vault not ready' → click a fragment first.\n" +
+  "• 'No fragment for key' → that key isn’t in the loaded vault.\n";
+
+function userManualHTML() {
+  return `
+    <p><b>You are a Signal Hunter.</b> Your mission is to reconstruct the Master Manifest by solving fragments.</p>
+
+    <p><b>Loop:</b> <b>SCAN</b> → Click fragment → <b>SOLVE</b> → <b>UNLOCK</b> → Next fragment</p>
+
+    <hr style="border:0;border-top:1px solid rgba(0,255,156,.14);margin:12px 0" />
+
+    <p><b>SCAN</b><br/>
+    Picks <b>one random Signal Fragment</b> for this session.</p>
+
+    <p><b>Click the Fragment</b><br/>
+    Clicking a fragment <b>synthesizes the vault in RAM</b> (not uploaded). This is what makes UNLOCK work.</p>
+
+    <p><b>SOLVE</b><br/>
+    You answer the question. If correct, the system unlocks the terminal fragment and selects the next unsolved signal.</p>
+
+    <p><b>UNLOCK (what users get)</b><br/>
+    UNLOCK reveals hidden fragments by key. It accepts:</p>
+    <ul style="margin:8px 0 0 18px">
+      <li><code>0x...</code> key (example: <code>0x163</code>)</li>
+      <li><code>enc:v1:...</code> encrypted fragment (asks passphrase)</li>
+    </ul>
+
+    <p class="muted tiny" style="margin-top:10px">
+      If UNLOCK says <b>Vault not ready</b>, you haven’t clicked a Signal yet.<br/>
+      If UNLOCK says <b>No fragment for key</b>, that key is not inside the currently loaded vault.
+    </p>
+
+    <p class="muted tiny" style="margin-top:10px">
+      <b>Progress:</b> Synchronicity reads URL flags like <code>?solved_0x100=1</code>.
+    </p>
+  `;
+}
+
+/* =======================
+   Onboarding modal (used as User Manual)
+   ======================= */
+let onboardingTimer = null;
+
+function setOnboardingOpen(open) {
+  if (!els.onboarding) return;
+  els.onboarding.classList.toggle("show", !!open);
+  els.onboarding.setAttribute("aria-hidden", open ? "false" : "true");
+}
+
+function setOnboardingBody(html) {
+  if (!els.onboarding) return;
+  const body = els.onboarding.querySelector(".modal-text");
+  if (!body) return;
+  body.innerHTML = html;
+}
+
+function closeOnboarding() {
+  clearInterval(onboardingTimer);
+  onboardingTimer = null;
+  setOnboardingOpen(false);
+}
+
+function openUserManual() {
+  clearInterval(onboardingTimer);
+  onboardingTimer = null;
+
+  setOnboardingBody(`
+    <div class="modal-text">
+      <p><b>HOW IT WORKS</b></p>
+      ${userManualHTML()}
+      <p class="muted tiny" style="margin-top:10px">Auto-closes in <span id="obTimer">25</span>s.</p>
+    </div>
+  `);
+
+  setOnboardingOpen(true);
+
+  let t = 25;
+  const timerEl = els.onboarding.querySelector("#obTimer");
+  if (timerEl) timerEl.textContent = String(t);
+
+  onboardingTimer = setInterval(() => {
+    t--;
+    const te = els.onboarding.querySelector("#obTimer");
+    if (te) te.textContent = String(Math.max(t, 0));
+    if (t <= 0) {
+      closeOnboarding();
+    }
+  }, 1000);
+}
+
+/* =======================
+   Modal feedback (puzzle modal)
    ======================= */
 let modalMsgEl = null;
 let modalCloseTimer = null;
@@ -72,7 +180,6 @@ function ensureModalMsgEl() {
   msg.style.background = "rgba(255,45,109,.10)";
   msg.style.color = "rgba(255,230,240,.92)";
 
-  // place under prompt (or inside modal)
   const anchor = els.puzPrompt?.parentElement || els.puzzleModal;
   anchor.appendChild(msg);
 
@@ -398,9 +505,7 @@ async function scanForSignals() {
 async function openSignal(sig) {
   active = sig;
 
-  // ✅ ARCHITECTURE FIX:
-  // DO NOT reset reject counter on open.
-  // Otherwise multi-fail hint progression can never happen.
+  // DO NOT reset reject counter on open (keep hint progression)
   // resetRejectCounter(sig.signal_id);
 
   clearTimeout(modalCloseTimer);
@@ -453,7 +558,7 @@ function closePuzzle() {
 /* =======================
    Engine-driven fail state adapter
    - If vaultReject() returns {count, stage, snippet}, we use it.
-   - If it returns nothing (current engine), we compute stages locally
+   - If it returns nothing, we compute stages locally
      while still calling engine for terminal output.
    ======================= */
 const LOCAL_FAIL = new Map(); // signalId -> count
@@ -474,12 +579,6 @@ function deriveStageAndSnippet(count, sig) {
   const hint = String(sig?.hint_mask || "").trim();
   const leak = hint ? hint.slice(0, Math.min(70, hint.length)) + (hint.length > 70 ? "…" : "") : "";
 
-  // Stage model:
-  // 1 DENIED
-  // 2 ALERT
-  // 3 HINT (leak)
-  // 4..(LOCKOUT_AFTER-1) DESTABILIZE
-  // LOCKOUT_AFTER LOCKOUT (terminate session)
   if (count <= 1) return { stage: "DENIED", snippet: "" };
   if (count === 2) return { stage: "ALERT", snippet: "" };
   if (count === 3) return { stage: "HINT", snippet: leak };
@@ -495,8 +594,6 @@ function rejectInfo(signalId, difficulty, sig) {
     info = null;
   }
 
-  // Engine already maintains its own counters; but if it returns nothing,
-  // we must maintain counts here for UX.
   if (info && typeof info === "object") {
     const count = Number(info.count || 1);
     const stage = String(info.stage || "DENIED").toUpperCase();
@@ -513,20 +610,16 @@ function rejectInfo(signalId, difficulty, sig) {
    Lockout termination
    ======================= */
 function terminateSession(signalId) {
-  // clear URL solved flags
   clearSolvedUrlFlags();
 
-  // clear session memory
   try {
     sessionStorage.removeItem(S_SEEN);
     sessionStorage.removeItem(S_SOLVED);
   } catch {}
 
-  // reset local + engine counters
   LOCAL_FAIL.clear();
   try { resetRejectCounter?.(signalId); } catch {}
 
-  // close modal
   closePuzzle();
 
   setStatus("session terminated");
@@ -534,7 +627,7 @@ function terminateSession(signalId) {
 
   revealDirectHint(
 `⚠ BRUTE FORCE DETECTED
-20 failed attempts recorded.
+${LOCKOUT_AFTER} failed attempts recorded.
 
 SESSION TERMINATED.
 Solved fragments lost.
@@ -543,7 +636,6 @@ Scan again to continue.`,
     { mode: "SYSTEM", key: "LOCKOUT", rare: true }
   );
 
-  // reset UI meter + panel
   setMeter();
   showSignalsHelper("Session terminated. Press SCAN to pull a new fragment.");
 }
@@ -556,37 +648,12 @@ function modalMessageFromReject(rej) {
   const stage = String(rej?.stage || "DENIED").toUpperCase();
   const snippet = (rej?.snippet || "").trim();
 
-  if (stage === "DENIED") {
-    return { type: "bad", text: `ACCESS DENIED • TRY AGAIN (${n}/${LOCKOUT_AFTER})`, close: false, shake: 520 };
-  }
-  if (stage === "ALERT") {
-    return { type: "warn", text: `SECOND FAILURE • THINK DIFFERENT (${n}/${LOCKOUT_AFTER})`, close: false, shake: 480 };
-  }
-  if (stage === "HINT") {
-    return {
-      type: "warn",
-      text: snippet ? `HINT LEAK (${n}/${LOCKOUT_AFTER}) • ${snippet}` : `HINT LEAK (${n}/${LOCKOUT_AFTER})`,
-      close: false, // keep open so user can use the hint
-      shake: 380,
-    };
-  }
-  if (stage === "DESTABILIZE") {
-    return {
-      type: "bad",
-      text: snippet ? `DESTABILIZING (${n}/${LOCKOUT_AFTER}) • ${snippet}` : `DESTABILIZING (${n}/${LOCKOUT_AFTER})`,
-      close: false,
-      shake: 520,
-    };
-  }
-  if (stage === "LOCKOUT") {
-    return {
-      type: "bad",
-      text: "LOCKOUT • SESSION TERMINATED",
-      close: true, // close on lockout
-      shake: 620,
-    };
-  }
-  return { type: "bad", text: `REJECTED (${n}/${LOCKOUT_AFTER})`, close: false, shake: 520 };
+  if (stage === "DENIED") return { type: "bad", text: `ACCESS DENIED • TRY AGAIN (${n}/${LOCKOUT_AFTER})`, shake: 520 };
+  if (stage === "ALERT") return { type: "warn", text: `SECOND FAILURE • THINK DIFFERENT (${n}/${LOCKOUT_AFTER})`, shake: 480 };
+  if (stage === "HINT") return { type: "warn", text: snippet ? `HINT LEAK (${n}/${LOCKOUT_AFTER}) • ${snippet}` : `HINT LEAK (${n}/${LOCKOUT_AFTER})`, shake: 380 };
+  if (stage === "DESTABILIZE") return { type: "bad", text: snippet ? `DESTABILIZING (${n}/${LOCKOUT_AFTER}) • ${snippet}` : `DESTABILIZING (${n}/${LOCKOUT_AFTER})`, shake: 520 };
+  if (stage === "LOCKOUT") return { type: "bad", text: "LOCKOUT • SESSION TERMINATED", shake: 620 };
+  return { type: "bad", text: `REJECTED (${n}/${LOCKOUT_AFTER})`, shake: 520 };
 }
 
 /* =======================
@@ -605,7 +672,7 @@ async function solveActive() {
       modalShake(420);
       Sound.tick("sys");
       els.puzAnswer?.focus?.();
-      return; // keep open
+      return;
     }
 
     let ok = false;
@@ -618,22 +685,18 @@ async function solveActive() {
       showModalMessage(ui.text, ui.type);
       modalShake(ui.shake || 520);
 
-      // Soft warning beep as failures escalate
       if (rej.stage === "ALERT" || rej.stage === "HINT") Sound.tick("warn");
 
-      // terminate on LOCKOUT
       if (rej.stage === "LOCKOUT" || rej.count >= LOCKOUT_AFTER) {
-        scheduleClosePuzzle(250);
         terminateSession(active.signal_id);
         return;
       }
 
-      // keep modal open for hints
       els.puzAnswer?.focus?.();
       return;
     }
 
-    // ✅ SUCCESS: reset fail counters (local + engine)
+    // SUCCESS: reset fail counters (local + engine)
     localReset(active.signal_id);
     resetRejectCounter?.(active.signal_id);
 
@@ -703,6 +766,7 @@ function wireUI() {
 
     keyInput: document.getElementById("keyInput"),
     unlockBtn: document.getElementById("unlockBtn"),
+    helpBtn: document.getElementById("helpBtn"),
     clearBtn: document.getElementById("clearBtn"),
 
     menuBtn: document.getElementById("menuBtn"),
@@ -743,8 +807,17 @@ function wireUI() {
     }
     unlockHintByKey(v);
   });
+
   els.keyInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") els.unlockBtn?.click?.();
+  });
+
+  // ✅ HELP button now works (terminal guide)
+  els.helpBtn?.addEventListener("click", () => {
+    revealDirectHint(HELP_TERMINAL_TEXT, { mode: "SYSTEM", key: "HELP", rare: true });
+    setStatus("help loaded");
+    Sound.tick("sys");
+    jumpToNewest?.();
   });
 
   els.clearBtn?.addEventListener("click", () => {
@@ -772,6 +845,13 @@ function wireUI() {
     e.stopPropagation();
     toggleMenu();
   });
+
+  // ✅ Menu → How it works opens full manual explaining UNLOCK
+  els.openOnboarding?.addEventListener("click", () => {
+    toggleMenu(false);
+    openUserManual();
+  });
+
   document.addEventListener("click", (e) => {
     if (!els.menuDrop?.classList.contains("open")) return;
     const inMenu = e.target?.closest?.("#menuDrop");
@@ -779,33 +859,20 @@ function wireUI() {
     if (inMenu || onBtn) return;
     toggleMenu(false);
   });
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       toggleMenu(false);
       closePuzzle();
+      closeOnboarding();
     }
   });
 
-  // Onboarding
-  function openOnboarding() {
-    els.onboarding?.classList.add("show");
-    let t = 10;
-    if (els.obTimer) els.obTimer.textContent = String(t);
-    const it = setInterval(() => {
-      t--;
-      if (els.obTimer) els.obTimer.textContent = String(Math.max(t, 0));
-      if (t <= 0) {
-        clearInterval(it);
-        els.onboarding?.classList.remove("show");
-      }
-    }, 1000);
-  }
-  els.openOnboarding?.addEventListener("click", openOnboarding);
-  els.closeOnboarding?.addEventListener("click", () => els.onboarding?.classList.remove("show"));
-  if (!sessionStorage.getItem("myrq_seen_ob")) {
-    sessionStorage.setItem("myrq_seen_ob", "1");
-    setTimeout(openOnboarding, 500);
-  }
+  // Onboarding close + click outside
+  els.closeOnboarding?.addEventListener("click", closeOnboarding);
+  els.onboarding?.addEventListener("click", (e) => {
+    if (e.target === els.onboarding) closeOnboarding();
+  });
 
   // Sound toggle
   els.soundToggle?.addEventListener("click", () => {

@@ -5,169 +5,266 @@
 <title>MYRQAI — Stealth Image Messaging</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- ✅ Google AdSense -->
-<script async 
+<!-- ✅ Google AdSense (kept) -->
+<script async
   src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8668540803235423"
   crossorigin="anonymous">
 </script>
 
 <style>
-/* === HACKER THEME VARIABLES === */
-:root {
-  --glitch-green: #00ff41;
-  --dark-void: #020617;
-  --terminal-bg: transparent; 
-  --neon-red: #ff003c;
+/* === RED THEME VARIABLES === */
+:root{
+  --neon: #ff003c;        /* main neon red */
+  --neon2:#ff2d6d;        /* secondary red */
+  --dark-void:#020617;
+  --terminal-bg: transparent;
+  --line: rgba(255,0,60,.18);
+  --line2: rgba(255,0,60,.34);
 }
 
-* { box-sizing: border-box; cursor: crosshair; }
+/* reset */
+*{ box-sizing:border-box; cursor: crosshair; }
 
-body {
-  margin: 0;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  background: radial-gradient(circle at center, #0a1128 0%, var(--dark-void) 100%);
+body{
+  margin:0;
+  font-family:'JetBrains Mono','Courier New', monospace;
+
+  /* ✅ RED background like index vibe */
+  background:
+    radial-gradient(1200px 600px at 30% 10%, rgba(255,0,60,.14), transparent 60%),
+    radial-gradient(900px 500px at 80% 80%, rgba(255,45,109,.10), transparent 55%),
+    radial-gradient(circle at center, #0a0f25 0%, var(--dark-void) 100%);
   background-attachment: fixed;
-  color: var(--glitch-green);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 20px 0;
+
+  color: var(--neon);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:20px 0;
+
+  position: relative;
+}
+
+/* ✅ LOGO.PNG BACKGROUND WATERMARK (BEHIND MATRIX + UI) */
+body::after{
+  content:"";
+  position: fixed;
+  inset: 0;
+  background: url("stealth.png") center center / 520px auto no-repeat;
+  opacity: .08;                 /* tweak 0.04 - 0.12 */
+  filter: blur(.2px) contrast(1.1) saturate(1.1);
+  mix-blend-mode: screen;       /* ghosty neon effect on dark */
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* MATRIX CANVAS */
-#canvas-matrix {
+#canvas-matrix{
   position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  z-index: 1;
-  opacity: 0.12; 
-  pointer-events: none;
+  top:0; left:0;
+  width:100%; height:100%;
+  z-index:1;            /* above watermark */
+  opacity:.14;
+  pointer-events:none;
 }
 
 /* CRT SCANLINE EFFECT */
-body::before {
-  content: " ";
-  display: block;
-  position: fixed;
-  top: 0; left: 0; bottom: 0; right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
-              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-  z-index: 100;
-  background-size: 100% 2px, 3px 100%;
-  pointer-events: none;
+body::before{
+  content:" ";
+  display:block;
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  background:
+    linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.15) 50%),
+    linear-gradient(90deg, rgba(255,0,60,0.05), rgba(255,45,109,0.02), rgba(120,0,20,0.05));
+  z-index:100;          /* always on top */
+  background-size:100% 2px, 3px 100%;
+  pointer-events:none;
 }
 
 /* LOGO */
-.logo-container {
-  width: 100%;
-  max-width: 400px;
-  text-align: center;
-  z-index: 10;
-  margin-bottom: 20px;
-  perspective: 1000px;
+.logo-container{
+  width:100%;
+  max-width:400px;
+  text-align:center;
+  z-index:10;
+  margin-bottom:20px;
+  perspective:1000px;
+  position: relative;   /* ensure above watermark/matrix */
 }
+.logo-container img{
+  width:100%;
+  height:auto;
+  display:block;
+  margin:0 auto;
 
-.logo-container img {
-  width: 100%; height: auto; display: block; margin: 0 auto;
-  filter: drop-shadow(0 0 5px var(--glitch-green)) drop-shadow(0 0 15px var(--glitch-green));
+  filter: drop-shadow(0 0 6px var(--neon)) drop-shadow(0 0 18px rgba(255,0,60,.9));
   animation: racing-glow 2s ease-in-out infinite alternate;
 }
-
-@keyframes racing-glow {
-  0% { filter: drop-shadow(0 0 5px var(--glitch-green)); transform: scale(1); }
-  100% { filter: drop-shadow(0 0 25px var(--glitch-green)); transform: scale(1.02); }
+@keyframes racing-glow{
+  0%   { filter: drop-shadow(0 0 6px var(--neon)); transform: scale(1); }
+  100% { filter: drop-shadow(0 0 28px rgba(255,0,60,1)); transform: scale(1.02); }
 }
 
 /* CENTER CONTAINER */
-.container {
-  max-width: 480px;
-  width: 92%;
+.container{
+  max-width:480px;
+  width:92%;
   background: var(--terminal-bg);
-  padding: 30px;
-  border: 1px solid rgba(0, 255, 65, 0.15);
-  border-radius: 4px;
-  position: relative;
-  z-index: 10;
-  margin-bottom: 60px;
-  animation: slideInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
-  /* FIX: Ensure container grows with text */
-  height: auto;
-  overflow: visible;
+  padding:30px;
+  border:1px solid rgba(255,0,60,0.18);
+  border-radius:4px;
+  position:relative;
+  z-index:10;           /* keep above watermark/matrix */
+  margin-bottom:60px;
+  animation: slideInUp .8s cubic-bezier(.2,.8,.2,1);
+
+  height:auto;
+  overflow:visible;
+
+  box-shadow: 0 0 30px rgba(255,0,60,.18);
 }
 
 /* Glowing Corners */
-.container::before, .container::after, .corner-accent::before, .corner-accent::after {
-  content: ""; position: absolute; width: 40px; height: 40px; border: 3px solid var(--glitch-green); z-index: 11; animation: bracket-glow 4s ease-in-out infinite;
+.container::before,
+.container::after,
+.corner-accent::before,
+.corner-accent::after{
+  content:"";
+  position:absolute;
+  width:40px; height:40px;
+  border:3px solid var(--neon);
+  z-index:11;
+  animation: bracket-glow 4s ease-in-out infinite;
 }
-.container::before { top: -10px; left: -10px; border-right: 0; border-bottom: 0; }
-.container::after { bottom: -10px; right: -10px; border-left: 0; border-top: 0; }
-.corner-accent::before { top: -10px; right: -10px; border-left: 0; border-bottom: 0; }
-.corner-accent::after { bottom: -10px; left: -10px; border-right: 0; border-top: 0; }
+.container::before{ top:-10px; left:-10px; border-right:0; border-bottom:0; }
+.container::after{ bottom:-10px; right:-10px; border-left:0; border-top:0; }
+.corner-accent::before{ top:-10px; right:-10px; border-left:0; border-bottom:0; }
+.corner-accent::after{ bottom:-10px; left:-10px; border-right:0; border-top:0; }
 
-@keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes bracket-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; filter: drop-shadow(0 0 10px var(--glitch-green)); } }
-
-.stealth-title {
-  font-size: 1.4rem; margin-bottom: 20px; text-align: center; color: #fff;
-  text-shadow: 0 0 10px var(--glitch-green); text-transform: uppercase; letter-spacing: 4px;
-}
-
-/* Form Elements */
-.mode-switch { display: flex; gap: 10px; margin-bottom: 20px; }
-.mode-switch button {
-  flex: 1; padding: 12px; border: 1px solid var(--glitch-green);
-  background: rgba(2, 6, 23, 0.8); color: var(--glitch-green); cursor: pointer; transition: 0.3s;
-  font-family: inherit; font-weight: bold; text-transform: uppercase;
-}
-.mode-switch button.active { background: var(--glitch-green); color: var(--dark-void); box-shadow: 0 0 15px var(--glitch-green); }
-
-textarea, input {
-  width: 100%; padding: 12px; margin-top: 10px; border: 1px solid var(--glitch-green);
-  background: rgba(2, 6, 23, 0.9); color: #fff; font-family: inherit; outline: none; border-radius: 4px;
+@keyframes slideInUp{ from{opacity:0; transform:translateY(20px)} to{opacity:1; transform:translateY(0)} }
+@keyframes bracket-glow{
+  0%,100%{ opacity:.3; }
+  50%{ opacity:1; filter: drop-shadow(0 0 12px rgba(255,0,60,.95)); }
 }
 
-.btn {
-  width: 100%; margin-top: 15px; padding: 15px; border: 1px solid var(--glitch-green);
-  background: rgba(0, 255, 65, 0.1); color: var(--glitch-green); font-weight: bold;
-  text-transform: uppercase; cursor: pointer !important; transition: 0.3s; border-radius: 4px;
+.stealth-title{
+  font-size:1.4rem;
+  margin-bottom:20px;
+  text-align:center;
+  color:#fff;
+  text-shadow: 0 0 12px rgba(255,0,60,.9);
+  text-transform:uppercase;
+  letter-spacing:4px;
 }
-.btn:hover:not(:disabled) { background: var(--glitch-green); color: var(--dark-void); box-shadow: 0 0 20px var(--glitch-green); }
-.btn:disabled { opacity: 0.2; cursor: not-allowed !important; }
 
-/* FIX: Results box overflow and wrapping */
-.result { 
-  margin-top: 15px; padding: 12px; background: rgba(2, 6, 23, 0.95); 
-  border: 1px dashed var(--neon-red); font-size: 0.85rem;
+/* Mode Switch */
+.mode-switch{ display:flex; gap:10px; margin-bottom:20px; }
+.mode-switch button{
+  flex:1;
+  padding:12px;
+  border:1px solid rgba(255,0,60,.75);
+  background: rgba(2,6,23,0.82);
+  color: var(--neon);
+  cursor:pointer;
+  transition:.3s;
+  font-family:inherit;
+  font-weight:bold;
+  text-transform:uppercase;
+}
+.mode-switch button.active{
+  background: var(--neon);
+  color: var(--dark-void);
+  box-shadow: 0 0 18px rgba(255,0,60,.85);
+}
+
+/* Inputs */
+textarea, input{
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border:1px solid rgba(255,0,60,.75);
+  background: rgba(2,6,23,0.92);
+  color:#fff;
+  font-family:inherit;
+  outline:none;
+  border-radius:4px;
+}
+textarea::placeholder,
+input::placeholder{
+  color: rgba(255,0,60,.45);
+}
+
+/* Buttons */
+.btn{
+  width:100%;
+  margin-top:15px;
+  padding:15px;
+  border:1px solid rgba(255,0,60,.75);
+  background: rgba(255,0,60,0.10);
+  color: var(--neon);
+  font-weight:bold;
+  text-transform:uppercase;
+  cursor:pointer !important;
+  transition:.3s;
+  border-radius:4px;
+}
+.btn:hover:not(:disabled){
+  background: var(--neon);
+  color: var(--dark-void);
+  box-shadow: 0 0 22px rgba(255,0,60,.85);
+}
+.btn:disabled{
+  opacity:.2;
+  cursor:not-allowed !important;
+}
+
+/* Results */
+.result{
+  margin-top:15px;
+  padding:12px;
+  background: rgba(2,6,23,0.95);
+  border: 1px dashed rgba(255,0,60,.85);
+  font-size:.85rem;
+
   animation: pulse-red 2s infinite alternate;
-  /* Crucial wrap settings */
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  word-break: break-word; 
-  white-space: pre-wrap; 
-  max-width: 100%;
+
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  word-break:break-word;
+  white-space:pre-wrap;
+  max-width:100%;
+}
+@keyframes pulse-red{
+  from{ border-color: rgba(255,0,60,0.35); box-shadow: 0 0 6px rgba(255,0,60,0.10); }
+  to  { border-color: var(--neon);          box-shadow: 0 0 16px rgba(255,0,60,0.28); }
 }
 
-@keyframes pulse-red {
-  from { border-color: rgba(255, 0, 60, 0.3); box-shadow: 0 0 5px rgba(255, 0, 60, 0.1); }
-  to { border-color: var(--neon-red); box-shadow: 0 0 15px rgba(255, 0, 60, 0.3); }
+/* Manifest */
+.hacker-manifest{
+  background: rgba(2,6,23,0.90);
+  border:1px solid rgba(255,0,60,0.30);
+  padding:12px;
+  margin-bottom:15px;
+  font-size:.7rem;
+  position:relative;
+  overflow:hidden;
 }
-
-.hacker-manifest {
-  background: rgba(2, 6, 23, 0.9); border: 1px solid rgba(0,255,65,0.3);
-  padding: 12px; margin-bottom: 15px; font-size: 0.7rem; position: relative; overflow: hidden;
-}
-
-.hacker-manifest::after {
-  content: ""; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0,255,65,0.1), transparent);
+.hacker-manifest::after{
+  content:"";
+  position:absolute;
+  top:0; left:-100%;
+  width:100%; height:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,0,60,0.10), transparent);
   animation: scan 3s infinite;
 }
-@keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
+@keyframes scan{ 0%{ left:-100% } 100%{ left:100% } }
 </style>
 </head>
+
 <body>
 
 <canvas id="canvas-matrix"></canvas>
@@ -187,7 +284,7 @@ textarea, input {
 
   <div id="encodeArea">
     <div class="hacker-manifest">
-      <div style="color: var(--glitch-green); font-weight: bold; border-bottom: 1px solid rgba(0,255,65,0.2); padding-bottom: 5px; margin-bottom: 5px;">
+      <div style="color: var(--neon); font-weight: bold; border-bottom: 1px solid rgba(255,0,60,0.2); padding-bottom: 5px; margin-bottom: 5px;">
         SYSTEM_MANIFEST.LOG
       </div>
       <code>[COMPATIBILITY]: PNG-24 (LOSSLESS)</code><br>
@@ -197,29 +294,35 @@ textarea, input {
     <textarea id="secretMessage" placeholder="Secret Message (Max 100 chars)..." maxlength="100"></textarea>
     <input type="file" id="coverImageInput" accept="image/png">
     <input type="text" id="secretKey" placeholder="Secret Key (6–12 A-Z 0-9)" maxlength="12">
-    
+
     <div id="capacityInfo" class="result" style="display:none;"></div>
     <div id="encodeStatus" class="result" style="display:none;"></div>
 
     <button class="btn" id="generateImageBtn" disabled>🧨 Generate Stealth Image</button>
-    <a id="downloadLink" class="btn" style="display:none; text-decoration: none; text-align: center;"></a>
-    
-    <button class="btn" onclick="window.location.href='index.html'" style="background:transparent; border-color: rgba(0,255,65,0.3); margin-top: 10px;">⬅ RETURN_TO_BASE</button>
+    <a id="downloadLink" class="btn" style="display:none; text-decoration:none; text-align:center;"></a>
+
+    <button class="btn" onclick="window.location.href='index.html'"
+      style="background:transparent; border-color: rgba(255,0,60,0.35); margin-top:10px;">
+      ⬅ RETURN_TO_BASE
+    </button>
   </div>
 
   <div id="decodeArea" style="display:none;">
     <input type="file" id="imageInput" accept="image/png">
     <input type="text" id="decodeKey" placeholder="Enter Secret Key" maxlength="12">
-    
+
     <div id="decodeStatus" class="result" style="display:none;"></div>
-    
-    <div id="decodedResult" class="result" style="display:none; color: #fff;">
-       <div style="font-size: 0.6rem; color: var(--glitch-green); margin-bottom: 5px;">[ DECRYPTED_PAYLOAD ]</div>
-       <div id="actualMessage" style="font-weight: bold; letter-spacing: 1px;"></div>
+
+    <div id="decodedResult" class="result" style="display:none; color:#fff;">
+      <div style="font-size:0.6rem; color: var(--neon); margin-bottom:5px;">[ DECRYPTED_PAYLOAD ]</div>
+      <div id="actualMessage" style="font-weight:bold; letter-spacing:1px;"></div>
     </div>
 
     <button class="btn" id="extractBtn" disabled>🔓 Extract Message</button>
-    <button class="btn" onclick="window.location.href='index.html'" style="background:transparent; border-color: rgba(0,255,65,0.3); margin-top: 10px;">⬅ RETURN_TO_BASE</button>
+    <button class="btn" onclick="window.location.href='index.html'"
+      style="background:transparent; border-color: rgba(255,0,60,0.35); margin-top:10px;">
+      ⬅ RETURN_TO_BASE
+    </button>
   </div>
 </div>
 
@@ -231,7 +334,8 @@ textarea, input {
   /* MATRIX RAIN LOGIC */
   const canvas = document.getElementById('canvas-matrix');
   const ctx = canvas.getContext('2d');
-  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+
+  function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
   window.onresize = resize;
   resize();
 
@@ -239,11 +343,15 @@ textarea, input {
   const fontSize = 16;
   const columns = Math.floor(canvas.width / fontSize);
   const drops = Array(columns).fill(1);
-  function draw() {
-    ctx.fillStyle = "rgba(2, 6, 23, 0.1)";
+
+  function draw(){
+    ctx.fillStyle = "rgba(2, 6, 23, 0.10)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#00ff41";
+
+    /* ✅ red matrix */
+    ctx.fillStyle = "#ff003c";
     ctx.font = fontSize + "px monospace";
+
     drops.forEach((y, i) => {
       const text = chars[Math.floor(Math.random() * chars.length)];
       ctx.fillText(text, i * fontSize, y * fontSize);
@@ -254,8 +362,9 @@ textarea, input {
   setInterval(draw, 35);
 
   /* INTERFACE LOGIC */
-  window.isImageSizeValid = false; 
-  function updateGenerateBtn() {
+  window.isImageSizeValid = false;
+
+  function updateGenerateBtn(){
     const key = document.getElementById("secretKey").value.trim();
     const coverInput = document.getElementById("coverImageInput");
     const genBtn = document.getElementById("generateImageBtn");
@@ -265,7 +374,7 @@ textarea, input {
   }
   window.updateGenerateBtn = updateGenerateBtn;
 
-  function updateExtractBtn() {
+  function updateExtractBtn(){
     const dKey = document.getElementById("decodeKey").value.trim();
     const fIn = document.getElementById("imageInput").files.length > 0;
     const keyValid = /^[A-Z0-9]{6,12}$/.test(dKey.toUpperCase());
@@ -277,6 +386,7 @@ textarea, input {
     updateGenerateBtn();
   });
   document.getElementById("coverImageInput").addEventListener("change", updateGenerateBtn);
+
   document.getElementById("decodeKey").addEventListener("input", (e) => {
     e.target.value = e.target.value.toUpperCase();
     updateExtractBtn();

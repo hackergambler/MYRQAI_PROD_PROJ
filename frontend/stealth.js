@@ -18,26 +18,45 @@ const MIN_DIMENSION = 256;
 let currentImageValid = false;
 
 /* =============================
+   THEME COLORS (RED MODE)
+   - OK now uses neon red (instead of green)
+   - Error uses a deeper / alternate red for contrast
+   - Pull from CSS variables if you have them
+============================= */
+function cssVar(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const OK_COLOR = cssVar("--neon-red", "#ff003c");       // ✅ Success = neon red
+const ERR_COLOR = cssVar("--danger-red", "#ff4d6d");    // ❌ Error = alternate red (still red theme)
+
+/* =============================
    STATUS HELPERS
 ============================= */
 function showStatus(id, msg, ok = false) {
   const el = document.getElementById(id);
   if (!el) return;
   el.style.display = "block";
-  el.style.color = ok ? "#00ff41" : "#ff003c"; // Using your CSS variables
+  el.style.color = ok ? OK_COLOR : ERR_COLOR;
   el.innerText = msg;
 }
 
 // Typewriter effect for a "hacker" feel
 function typeWriter(text, elementId) {
   const el = document.getElementById(elementId);
+  if (!el) return;
   el.innerText = "";
   let i = 0;
   const interval = setInterval(() => {
     el.innerText += text.charAt(i);
     i++;
     if (i >= text.length) clearInterval(interval);
-  }, 30); // Speed of typing
+  }, 30);
 }
 
 function getPerimeterIndices(width, height) {
@@ -102,12 +121,14 @@ coverInput?.addEventListener("change", e => {
     if (img.width < MIN_DIMENSION || img.height < MIN_DIMENSION) {
       showStatus("encodeStatus", `Image too small. Minimum ${MIN_DIMENSION}x${MIN_DIMENSION} required.`);
       currentImageValid = false;
-      capacityInfo.style.display = "none";
+      if (capacityInfo) capacityInfo.style.display = "none";
     } else {
       showStatus("encodeStatus", "Image dimensions verified.", true);
       currentImageValid = true;
-      capacityInfo.style.display = "block";
-      capacityInfo.innerText = `Stealth Limit: ${ABSOLUTE_MAX_CHARS} characters (Perimeter Mode)`;
+      if (capacityInfo) {
+        capacityInfo.style.display = "block";
+        capacityInfo.innerText = `Stealth Limit: ${ABSOLUTE_MAX_CHARS} characters (Perimeter Mode)`;
+      }
     }
 
     if (typeof window.updateGenerateBtn === "function") {
@@ -122,12 +143,12 @@ coverInput?.addEventListener("change", e => {
    ENCODE LOGIC
 ============================= */
 document.getElementById("generateImageBtn")?.addEventListener("click", async () => {
-  const message = msgInput.value.trim();
-  const key = document.getElementById("secretKey").value.trim().toUpperCase();
-  const file = coverInput.files[0];
+  const message = msgInput?.value?.trim() || "";
+  const key = document.getElementById("secretKey")?.value?.trim()?.toUpperCase() || "";
+  const file = coverInput?.files?.[0];
   const link = document.getElementById("downloadLink");
 
-  link.style.display = "none";
+  if (link) link.style.display = "none";
   showStatus("encodeStatus", "🔄 Handshaking Secure Perimeter...", true);
 
   try {
@@ -150,12 +171,13 @@ document.getElementById("generateImageBtn")?.addEventListener("click", async () 
 
       if (bytes.length > perimeter.length) {
         showStatus("encodeStatus", "Message exceeds perimeter capacity.");
+        URL.revokeObjectURL(url);
         return;
       }
 
       for (let i = 0; i < bytes.length; i++) {
         const pixelIdx = perimeter[i] * 4;
-        pixels[pixelIdx] = 56; 
+        pixels[pixelIdx] = 56;
         pixels[pixelIdx + 1] = bytes[i];
       }
       ctx.putImageData(imageData, 0, 0);
@@ -163,14 +185,17 @@ document.getElementById("generateImageBtn")?.addEventListener("click", async () 
       const isVerified = await validateEncryptionIntegrity(message, key, canvas.width, canvas.height);
 
       if (isVerified) {
-        link.href = canvas.toDataURL("image/png");
-        link.download = "stealth_payload.png";
-        link.style.display = "inline-block";
-        link.innerText = "⬇ DOWNLOAD VERIFIED IMAGE";
+        if (link) {
+          link.href = canvas.toDataURL("image/png");
+          link.download = "stealth_payload.png";
+          link.style.display = "inline-block";
+          link.innerText = "⬇ DOWNLOAD VERIFIED IMAGE";
+        }
         showStatus("encodeStatus", "✅ STEALTH PAYLOAD READY", true);
       } else {
         showStatus("encodeStatus", "❌ COMPATIBILITY ERROR: Injection failed.");
       }
+
       URL.revokeObjectURL(url);
     };
   } catch (err) {
@@ -182,8 +207,8 @@ document.getElementById("generateImageBtn")?.addEventListener("click", async () 
    DECODE LOGIC
 ============================= */
 document.getElementById("extractBtn")?.addEventListener("click", async () => {
-  const file = document.getElementById("imageInput").files[0];
-  const key = document.getElementById("decodeKey").value.trim().toUpperCase();
+  const file = document.getElementById("imageInput")?.files?.[0];
+  const key = document.getElementById("decodeKey")?.value?.trim()?.toUpperCase() || "";
 
   if (!file || !key) return;
 
@@ -218,15 +243,12 @@ document.getElementById("extractBtn")?.addEventListener("click", async () => {
       const payload = JSON.parse(atob(cleanJson));
       const decrypted = await decryptMessage(payload.msg, key);
 
-      // Target the new child ID instead of the whole box
       const resultContainer = document.getElementById("decodedResult");
-      resultContainer.style.display = "block";
-      
-      // Typewriter effect for the extracted secret
+      if (resultContainer) resultContainer.style.display = "block";
+
       typeWriter(decrypted, "actualMessage");
 
       showStatus("decodeStatus", "✅ EXTRACTION COMPLETE", true);
-
     } catch (e) {
       showStatus("decodeStatus", "Error: Unauthorized Key or Corrupted IMAGE.");
     } finally {

@@ -586,6 +586,45 @@ body::after{
 .btn.ghost{ background: rgba(0,0,0,.08); }
 .btn.small{ padding: 10px 12px; border-radius: 14px; }
 
+/* === RETURN TO BASE BUTTON (VOID THEME) === */
+.back-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  margin-top: 16px;
+  padding: 14px 18px;
+  font-size: 12px;
+
+  background: rgba(0,255,156,.08);
+  color: rgba(225,255,245,.92);
+  text-decoration: none;
+
+  border: 1px solid rgba(0,255,156,.30);
+  border-radius: 16px;
+
+  letter-spacing: .12em;
+  font-weight: 900;
+  text-transform: uppercase;
+
+  box-shadow: 0 10px 26px rgba(0,0,0,.30);
+  backdrop-filter: blur(10px);
+
+  transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+
+.back-btn:hover{
+  background: rgba(0,255,156,.14);
+  border-color: rgba(0,255,156,.55);
+  box-shadow: 0 0 26px rgba(0,255,156,.12), 0 10px 26px rgba(0,0,0,.35);
+  transform: translateY(-1px);
+}
+
+.back-btn:active{
+  transform: translateY(0px);
+}
+
 .dot{
   display:inline-block;
   width:8px;height:8px;

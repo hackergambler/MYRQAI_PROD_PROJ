@@ -2,8 +2,10 @@
 :root {
   --glitch-green: #00ff41;
   --dark-void: #020617;
-  /* HUD Transparency: Set to 0 to allow the background image to show through cards */
-  --terminal-bg: rgba(2, 6, 23, 0); 
+
+  /* HUD Transparency: Set alpha > 0 for glass cards if needed */
+  --terminal-bg: rgba(2, 6, 23, 0);
+
   --error-red: #ff003c;
 }
 
@@ -13,40 +15,79 @@
   cursor: crosshair;
 }
 
-/* === TERMINAL BACKGROUND (FIXED LOGO) === */
+html, body {
+  height: 100%;
+}
+
+/* =========================================================
+   ✅ TERMINAL BACKGROUND (VOID GRADIENT + GHOST LOGO WATERMARK)
+   - Keeps your old "fixed" vibe
+   - Works under subfolders (relative logo path)
+   - UI stays above, scanlines stay top
+   ========================================================= */
 body {
-  /* This handles the logo as a fixed background layer */
-  background: url('/mylogo.png') no-repeat center center fixed; 
-  background-size: cover;
-  background-color: var(--dark-void);
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  margin: 0;
+  min-height: 100vh;
+
+  font-family: "JetBrains Mono", "Courier New", monospace;
+  color: var(--glitch-green);
+
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  margin: 0;
-  color: var(--glitch-green);
+
   position: relative;
   overflow-x: hidden;
+
+  /* Base void gradients (subtle) */
+  background:
+    radial-gradient(1200px 700px at 25% 12%, rgba(0,255,65,.10), transparent 60%),
+    radial-gradient(900px 500px at 80% 85%, rgba(0,255,65,.07), transparent 55%),
+    radial-gradient(circle at center, #0a0f25 0%, var(--dark-void) 100%);
+  background-attachment: fixed;
 }
 
-/* SUBTLE CRT SCANLINE OVERLAY */
+/* ✅ GHOST LOGO WATERMARK LAYER (BEHIND UI) */
+body::after{
+  content:"";
+  position: fixed;
+  inset: 0;
+
+  /* IMPORTANT:
+     Use relative path so it works when deployed under a subfolder (frontend/)
+     If your file is: frontend/logo.png this is correct.
+     (Change to ./mylogo.png if you want the old file instead.)
+  */
+  background: url("./logo.png") center center / 520px auto no-repeat;
+
+  opacity: .04; /* tweak 0.04 - 0.12 */
+  filter: blur(.2px) contrast(1.12) saturate(1.1);
+  mix-blend-mode: screen;
+
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* SUBTLE CRT SCANLINE OVERLAY (TOP MOST) */
 body::before {
-  content: " ";
+  content: "";
   display: block;
   position: fixed;
-  top: 0; left: 0; bottom: 0; right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
-              linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
-  z-index: 5;
+  top: 0; left: 0; right: 0; bottom: 0;
+
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+
   background-size: 100% 2px, 3px 100%;
+  z-index: 5;
   pointer-events: none;
 }
 
 .container {
   width: 100%;
   padding: 16px;
-  z-index: 10;
+  z-index: 10;          /* ✅ above watermark */
   position: relative;
 }
 
@@ -57,16 +98,21 @@ body::before {
   border-radius: 4px;
   width: 100%;
   max-width: 440px;
-  border: 1px solid rgba(0, 255, 65, 0.2); /* Subtle glass edge */
+
+  border: 1px solid rgba(0, 255, 65, 0.2);
   text-align: center;
   position: relative;
   margin: 0 auto;
-  backdrop-filter: blur(4px); /* Optional: adds a slight frost to the glass */
-  animation: fadeIn .6s ease-out;
+
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+
+  animation: fadeIn 0.6s ease-out;
 }
 
 /* CORNER BRACKETS WITH GLOW */
-.card::before, .card::after {
+.card::before,
+.card::after {
   content: "";
   position: absolute;
   width: 30px;
@@ -75,8 +121,20 @@ body::before {
   z-index: 11;
   animation: bracket-glow 4s ease-in-out infinite;
 }
-.card::before { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
-.card::after { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
+
+.card::before {
+  top: -8px;
+  left: -8px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.card::after {
+  bottom: -8px;
+  right: -8px;
+  border-left: 0;
+  border-top: 0;
+}
 
 @keyframes bracket-glow {
   0%, 100% { filter: drop-shadow(0 0 2px var(--glitch-green)); opacity: 0.4; }
@@ -94,29 +152,46 @@ h1 {
 }
 
 .tagline {
-  opacity: .75;
+  opacity: 0.75;
   margin: 10px 0 20px;
-  font-size: .85rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
-/* === INPUTS - Opaque backgrounds for readability against the logo === */
-textarea, input {
+/* === INPUTS - Opaque backgrounds for readability === */
+textarea,
+input {
   width: 100%;
   padding: 15px;
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.85); /* Keeps text legible over the background image */
+
+  background: rgba(2, 6, 23, 0.85);
   border: 1px solid var(--glitch-green);
+
   color: var(--glitch-green);
   font-family: inherit;
+
   outline: none;
   transition: 0.3s;
 }
 
-textarea:focus, input:focus {
+textarea:focus,
+input:focus {
   background: rgba(2, 6, 23, 0.95);
   box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+}
+
+/* Better focus for keyboard users */
+textarea:focus-visible,
+input:focus-visible,
+.btn:focus-visible,
+.back-btn:focus-visible,
+footer a:focus-visible,
+.footer a:focus-visible,
+.persona-btn:focus-visible {
+  outline: 2px solid rgba(0, 255, 65, 0.65);
+  outline-offset: 2px;
 }
 
 /* === EXECUTE BUTTON === */
@@ -125,14 +200,17 @@ textarea:focus, input:focus {
   margin-top: 20px;
   padding: 16px;
   border-radius: 8px;
+
   border: 1px solid var(--glitch-green);
   background: rgba(2, 6, 23, 0.85);
   color: var(--glitch-green);
+
   font-weight: bold;
   font-family: inherit;
   text-transform: uppercase;
-  cursor: pointer !important;
   letter-spacing: 2px;
+
+  cursor: pointer !important;
   transition: 0.3s;
 }
 
@@ -152,8 +230,10 @@ textarea:focus, input:focus {
   margin-top: 25px;
   padding: 20px;
   border-radius: 4px;
+
   background: rgba(2, 6, 23, 0.85);
   border: 1px dashed var(--glitch-green);
+
   position: relative;
   text-align: left;
   transition: 0.3s;
@@ -169,8 +249,10 @@ textarea:focus, input:focus {
   position: absolute;
   top: 10px;
   right: 10px;
+
   background: var(--glitch-green);
   color: var(--dark-void);
+
   font-size: 9px;
   font-weight: bold;
   padding: 4px 8px;
@@ -182,20 +264,26 @@ textarea:focus, input:focus {
   margin-top: 20px;
   padding: 15px;
   border-radius: 8px;
+
   background: rgba(2, 6, 23, 0.9);
   border: 1px dashed var(--glitch-green);
 }
 
-/* === FOOTER === */
-footer {
+/* === FOOTER (both <footer> and .footer supported) === */
+footer,
+.footer {
   margin-top: 25px;
   padding: 15px;
+
   background: rgba(2, 6, 23, 0.7);
   border-radius: 4px;
-  font-size: .7rem;
+
+  font-size: 0.7rem;
+  text-align: center;
 }
 
-footer a {
+footer a,
+.footer a {
   color: var(--glitch-green);
   text-decoration: none;
   margin: 0 10px;
@@ -203,7 +291,8 @@ footer a {
   transition: 0.3s;
 }
 
-footer a:hover {
+footer a:hover,
+.footer a:hover {
   opacity: 1;
   text-shadow: 0 0 8px var(--glitch-green);
 }
@@ -211,11 +300,119 @@ footer a:hover {
 /* === ANIMATIONS === */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================================
+   ✅ PERSONA SUITE (ONE FRAME) — NEON GREEN
+   This is CLEAN: no duplicate/conflicting blue overrides.
+   Works even with global button styles in index.html because
+   we fully style the persona buttons here.
+   ========================================================= */
+
+.persona-frame{
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,255,65,.28);
+  background: linear-gradient(180deg, rgba(0,255,65,.06), rgba(2,6,23,.35));
+  box-shadow: inset 0 0 18px rgba(0,255,65,.05);
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+
+/* scan sweep like vault/crypto */
+.persona-frame::after{
+  content:"";
+  position:absolute;
+  top:0;
+  left:-120%;
+  width:120%;
+  height:100%;
+  background: linear-gradient(90deg, transparent, rgba(0,255,65,.14), transparent);
+  animation: personaScan 4s infinite;
+  pointer-events: none;
+}
+
+@keyframes personaScan{
+  0%{ left:-120%; }
+  100%{ left:120%; }
+}
+
+.persona-head{
+  position: relative;
+  z-index: 2;
+  margin-bottom: 12px;
+}
+
+.persona-title{
+  color:#fff;
+  letter-spacing: 3px;
+  font-weight: 800;
+  font-size: 14px;
+  text-shadow: 0 0 12px rgba(0,255,65,.35);
+}
+
+.persona-sub{
+  font-size: 12px;
+  letter-spacing: 1px;
+  opacity: .9;
+  color: rgba(225,255,245,.85);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.persona-grid{
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+/* Persona buttons (scoped + complete) */
+.persona-frame .persona-btn{
+  width: 100%;
+  margin-top: 0; /* prevents "separate blocks" feeling */
+
+  padding: 14px;
+  border-radius: 10px;
+
+  border: 1px solid rgba(0,255,65,.55);
+  background: rgba(2,6,23,.92);
+  color: var(--glitch-green);
+
+  font-family: inherit;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+
+  cursor: crosshair;
+  transition: .25s;
+}
+
+.persona-frame .persona-btn:hover{
+  background: var(--glitch-green);
+  color: #020617;
+  box-shadow: 0 0 22px rgba(0,255,65,.65);
+  transform: translateY(-2px);
+}
+
+.persona-foot{
+  position: relative;
+  z-index: 2;
+  margin-top: 12px;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  opacity: .75;
+  color: rgba(202,255,223,.9);
+  text-transform: uppercase;
 }
 
 /* MOBILE SPACING */
 @media (max-width: 480px) {
   .card { padding: 25px 20px; }
   h1 { font-size: 1.2rem; }
+  .back-btn { padding: 14px 20px; font-size: 12px; }
+  .persona-btn { font-size: 12px; }
 }

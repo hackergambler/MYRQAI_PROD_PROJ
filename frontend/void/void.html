@@ -6,6 +6,8 @@
   <title>The Myrq Protocol: Ghost Signal</title>
   <meta name="description" content="You are a Signal Hunter. Scan, synthesize, and reconstruct the Master Manifest." />
   <link rel="icon" href="data:," />
+
+  <!-- ✅ FIX: void.html is inside /void, shared CSS is one level up -->
   <link rel="stylesheet" href="./style.css" />
 </head>
 
@@ -53,7 +55,6 @@
           <div class="meter-sub">Session-based progression + URL flags: <code>?solved_0x100=1</code></div>
         </div>
 
-        <!-- ✅ ONE signal only (random, session-safe) -->
         <div id="signals" class="signals single">
           <div class="side-text muted tiny" id="signalsHint">Press SCAN to pull a fragment…</div>
         </div>
@@ -74,10 +75,7 @@
     <section class="panel" role="region" aria-label="Ghost Signal Terminal">
       <div class="panel-head">
         <div class="badge" id="phaseBadge">SCANNING</div>
-
-        <!-- ✅ more radiant headline -->
         <h1 class="title radiant glitch" data-text="GHOST SIGNAL">GHOST SIGNAL</h1>
-
         <p class="subtitle">
           You are a <b>Signal Hunter</b>. Reconstruct the <b>Master Manifest</b> by solving fragments.
         </p>
@@ -112,7 +110,6 @@
         <div class="live"><span class="pulse"></span> LIVE</div>
       </div>
 
-      <!-- ✅ Terminal framed + scroll + newest -->
       <div class="terminal-frame" aria-label="Terminal Output">
         <div class="terminal-head">
           <div class="terminal-title">TERMINAL STREAM</div>
@@ -120,13 +117,9 @@
         </div>
         <div class="stream" id="voidStream" aria-live="polite"></div>
       </div>
-
-      <footer class="footer">
-        <div class="tiny">⚠️ Puzzle vault. Don’t use for harm.</div>
-        <div class="tiny muted">© MyrqAI</div>
-      </footer>
     </section>
 
+    <!-- Onboarding modal -->
     <div id="onboarding" class="modal" aria-hidden="true">
       <div class="modal-card">
         <div class="modal-title">The Myrq Protocol</div>
@@ -136,11 +129,12 @@
           <p class="muted tiny">Auto-closes in <span id="obTimer">10</span>s.</p>
         </div>
         <div class="modal-actions">
-          <button id="closeOnboarding" class="btn primary" type="button">ENTER TERMINAL</button>
+          <button id="closeOnboarding" class="btn primary" type="button">CLOSE</button>
         </div>
       </div>
     </div>
 
+    <!-- Puzzle modal -->
     <div id="puzzleModal" class="modal" aria-hidden="true">
       <div class="modal-card">
         <div class="modal-title" id="puzTitle">Signal</div>
@@ -156,24 +150,23 @@
         </div>
       </div>
     </div>
+
+    <!-- ✅ RETURN BUTTON -->
+    <div style="text-align:center; margin-top: 18px;">
+      <a href="../index.html" class="back-btn">⬅ SYSTEM_EXIT :: RETURN_TO_BASE</a>
+    </div>
+
+    <!-- ✅ SINGLE FOOTER (avoid duplicates) -->
+    <div class="footer">
+      <div class="tiny">⚠️ Puzzle vault. Don’t use for harm.</div>
+      <div class="tiny muted">© 2026 MYRQAI // PRIVACY_ENFORCED // BUILD_1.04</div>
+    </div>
   </main>
 
   <script>
+    /* These are relative to /void/ because this HTML is in /void/ */
     window.__PUZZLES_URL__ = "./puzzles.master.json";
-    window.__BG_IMAGE__ = "./assets/logo.gif";
-
-    (function () {
-      const url = window.__BG_IMAGE__;
-      if (!url) return;
-
-      const img = new Image();
-      img.onload = () => {
-        document.documentElement.style.setProperty("--bg-image", `url("${url}")`);
-        document.body.classList.add("bg-ready");
-      };
-      img.onerror = () => console.warn("[BG] failed:", url);
-      img.src = url;
-    })();
+    window.__BG_IMAGE__ = "./assets/logo1.png";
   </script>
 
   <script type="module" src="./app.js"></script>

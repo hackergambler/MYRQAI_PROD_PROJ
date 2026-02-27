@@ -282,15 +282,30 @@ export function unlockHintByKey(keyOrFragment) {
   let v = String(keyOrFragment || "").trim();
   if (!v) return;
 
+  // ✅ NEW: allow direct paste of KEY::VALUE (dev/testing secret_payload)
+  // Example: 0x163::TVlSUUFJX1ZBVUxUX1NUQVJUCkZS100...
+  // This reveals immediately without needing MAP / VAULT_READY.
+  const kv = v.match(/^(0x[0-9a-f]+)\s*::\s*(.+)$/i);
+  if (kv) {
+    const key = kv[1].toUpperCase();
+    const value = kv[2].trim();
+    // value may be base64 vault block OR enc:v1:...
+    reveal(value, { mode: "DEV", key });
+    return;
+  }
+
+  // encrypted fragment pasted directly
   if (isEncryptedFragment(v)) {
     promptDecryptAndReveal(v);
     return;
   }
 
+  // extract first 0x... anywhere
   const m = v.match(/0x[0-9a-f]+/i);
   if (m) v = m[0];
   v = v.toUpperCase();
 
+  // requires synthesized vault
   if (!VAULT_READY || !MAP || MAP.size === 0) {
     hintCard("🜏 Vault not ready.\nClick a Signal Card first (it synthesizes the vault).", {
       mode: "SYSTEM",
