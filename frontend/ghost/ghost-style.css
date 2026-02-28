@@ -1,0 +1,240 @@
+/* --- GHOST TRACE: HACKER TERMINAL V2 --- */
+
+:root {
+    --neon-green: #00ff41;
+    --dark-bg: #050505;
+    --terminal-gray: #0d0d0d;
+    --ghost-blur: rgba(0, 255, 65, 0.4);
+    --danger: #ff3e3e;
+    --scanline: rgba(0, 255, 65, 0.05);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* CRT Scanline & Flicker Overlay */
+body::before {
+    content: " ";
+    position: absolute;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(var(--scanline) 50%, rgba(0, 0, 0, 0.1) 50%);
+    background-size: 100% 4px;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0.3;
+}
+
+body {
+    background-color: var(--dark-bg);
+    color: var(--neon-green);
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    /* Retro Glow Effect */
+    text-shadow: 0 0 5px rgba(0, 255, 65, 0.7);
+}
+
+/* Container Hacker Polish */
+#ghost-container {
+    width: 90%;
+    max-width: 700px;
+    height: 85vh;
+    background: var(--terminal-gray);
+    border: 2px solid var(--neon-green);
+    box-shadow: 0 0 30px var(--ghost-blur);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 10;
+    animation: crt-flicker 0.1s infinite secondary; /* Subtle flicker */
+}
+
+/* Header - Matrix Style */
+#header {
+    padding: 15px;
+    border-bottom: 2px solid var(--neon-green);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 255, 65, 0.1);
+}
+
+h2 {
+    font-size: 1.1rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 900;
+}
+
+#share-btn {
+    background: transparent;
+    border: 1px solid var(--neon-green);
+    color: var(--neon-green);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-family: inherit;
+    transition: 0.2s;
+    box-shadow: 0 0 5px var(--neon-green);
+}
+
+#share-btn:hover {
+    background: var(--neon-green);
+    color: var(--dark-bg);
+    box-shadow: 0 0 20px var(--neon-green);
+}
+
+/* Chat Area */
+#chat-box {
+    flex: 1;
+    overflow-y: auto;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    background: radial-gradient(circle at center, #0a1a0a 0%, #050505 100%);
+}
+
+/* Message Hacker Polish */
+.msg {
+    max-width: 85%;
+    padding: 12px 18px;
+    position: relative;
+    word-wrap: break-word;
+    animation: glitchIn 0.2s ease;
+    border: 1px solid rgba(0, 255, 65, 0.2);
+}
+
+.me {
+    align-self: flex-end;
+    background: rgba(0, 255, 65, 0.05);
+    border-right: 4px solid var(--neon-green);
+    color: #fff;
+    text-shadow: 0 0 8px #fff;
+}
+
+.them {
+    align-self: flex-start;
+    background: rgba(0, 0, 0, 0.8);
+    border-left: 4px solid var(--neon-green);
+}
+
+/* The Glowing Timer Bar */
+.timer-bar {
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    height: 3px;
+    background: var(--neon-green);
+    width: 100%;
+    box-shadow: 0 0 10px var(--neon-green);
+    animation: shrink 10s linear forwards;
+}
+
+/* Input Area */
+#input-area {
+    padding: 20px;
+    border-top: 2px solid var(--neon-green);
+    display: flex;
+    gap: 15px;
+    background: #000;
+}
+
+#msg-input {
+    flex: 1;
+    background: #000;
+    border: 1px solid var(--neon-green);
+    color: var(--neon-green);
+    padding: 12px;
+    outline: none;
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+#msg-input::placeholder {
+    color: var(--dim-green);
+    opacity: 0.5;
+}
+
+#send-btn {
+    background: var(--neon-green);
+    border: none;
+    color: var(--dark-bg);
+    padding: 0 25px;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-family: inherit;
+    box-shadow: 0 0 10px var(--neon-green);
+}
+
+#send-btn:hover {
+    box-shadow: 0 0 20px var(--neon-green);
+    transform: scale(1.02);
+}
+
+/* --- HACKER ANIMATIONS --- */
+
+@keyframes glitchIn {
+    0% { opacity: 0; transform: translateX(-10px); filter: hue-rotate(90deg); }
+    100% { opacity: 1; transform: translateX(0); filter: hue-rotate(0deg); }
+}
+
+@keyframes shrink {
+    0% { width: 100%; background: var(--neon-green); }
+    80% { background: var(--neon-green); }
+    100% { width: 0%; background: var(--danger); box-shadow: 0 0 15px var(--danger); }
+}
+
+@keyframes crt-flicker {
+    0% { opacity: 0.99; }
+    50% { opacity: 1; }
+    100% { opacity: 0.98; }
+}
+
+.fading {
+    opacity: 0;
+    filter: blur(10px) grayscale(1);
+    transform: scale(0.95);
+    transition: all 1s ease;
+}
+
+/* Scrollbar Hacker Polish */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--dark-bg); }
+::-webkit-scrollbar-thumb { 
+    background: var(--neon-green);
+    box-shadow: 0 0 10px var(--neon-green);
+}
+
+/* Fuel Bar Container */
+.fuel-container {
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    margin-top: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* The Depleting Fuel */
+.fuel-bar {
+    height: 100%;
+    width: 100%;
+    background: var(--neon);
+    box-shadow: 0 0 8px var(--neon);
+    transition: width 15s linear, background 15s linear; /* Matches ghost-engine timer */
+}
+
+/* Critical State */
+.fuel-bar.empty {
+    width: 0% !important;
+    background: var(--emergency) !important;
+    box-shadow: 0 0 8px var(--emergency);
+}

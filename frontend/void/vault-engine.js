@@ -4,12 +4,12 @@
 // ✅ Fixes "newest button" logic for PREPEND stream (shows when you scroll DOWN/away from top)
 // ✅ Adds deterministic completion code + still prints VAULT OPEN at 100 fragments
 // ✅ Prevents duplicate log entries (solve + unlock) safely
-// ✅ Keeps everything local-only
+// ✅ FX FIX: reliably retriggers pulse + jitter so you ALWAYS see animations
 
 import { loadImageVault } from "./image-vault.js";
 import { isEncryptedFragment, decryptFragment } from "./crypto-vault.js";
 
-export const ENGINE_VERSION = "vault-engine@2026.02.27-r7"; // bump to confirm cache
+export const ENGINE_VERSION = "vault-engine@2026.02.27-r8-fxfix"; // bump to confirm cache
 
 let UI = { streamEl: null, statusEl: null, badgeEl: null, newestBtn: null };
 let HOOKS = { beep: null };
@@ -40,9 +40,9 @@ function storageRemove(key) {
    ================================ */
 const STORAGE_PREFIX = "MYRQAI_VAULT";
 const STORAGE_KEYS = {
-  solved: `${STORAGE_PREFIX}:solved`,     // object map { "0x112": true }
-  fragments: `${STORAGE_PREFIX}:fragments`, // number
-  vaultLog: `${STORAGE_PREFIX}:vaultlog`, // array entries (NEWEST FIRST)
+  solved: `${STORAGE_PREFIX}:solved`,
+  fragments: `${STORAGE_PREFIX}:fragments`,
+  vaultLog: `${STORAGE_PREFIX}:vaultlog`,
   lastSeen: `${STORAGE_PREFIX}:lastSeen`,
 };
 
@@ -173,6 +173,41 @@ export function isSignalUnlocked(signalIndex) {
   return true;
 }
 
+/* ================================
+   ✅ FX helpers (retrigger-safe)
+   ================================ */
+function forceReflow() {
+  try { void document.body.offsetHeight; } catch {}
+}
+
+function pulseBody(cls, ms = 260) {
+  try {
+    // retrigger even if class already present
+    document.body.classList.remove(cls);
+    forceReflow();
+    document.body.classList.add(cls);
+    setTimeout(() => document.body.classList.remove(cls), ms);
+  } catch {}
+}
+
+let _jitterN = 0;
+function jitterBody(ms = 900) {
+  // uses your CSS: body[class*="signal-jitter-"] { animation: jitter ... }
+  try {
+    // remove any existing jitter classes
+    const all = Array.from(document.body.classList);
+    for (const c of all) {
+      if (c.startsWith("signal-jitter-")) document.body.classList.remove(c);
+    }
+    forceReflow();
+
+    _jitterN = (_jitterN + 1) % 9;
+    const cls = `signal-jitter-${_jitterN}`;
+    document.body.classList.add(cls);
+    setTimeout(() => document.body.classList.remove(cls), ms);
+  } catch {}
+}
+
 /**
  * ✅ Exported: mark solved + add fragment (idempotent per signal_id).
  */
@@ -215,10 +250,13 @@ export function onSolveSuccess(meta = {}) {
   const rank = rankForFragments(fragments);
   const phase = phaseForFragments(fragments);
 
-  // Make it feel powerful
+  // ✅ MAKE IT OBVIOUS (these exist in your CSS)
+  pulseBody("vault-hit", 260);
+  jitterBody(900);
+  if (rank === "PROTOCOL COMPLETE" || fragments >= 100) pulseBody("vault-hit-2", 420);
+
   setStatus(`verified • ${rank} • ${fragments}/100`);
   HOOKS.beep?.(rank === "PROTOCOL COMPLETE" ? "rare" : "ok");
-  pulseBody("vault-hit", 220);
 
   const msg =
     `✅ VERIFIED: ${sid}\n` +
@@ -238,7 +276,8 @@ export function onSolveSuccess(meta = {}) {
         "⟡ Screenshot this as proof.",
       { mode: "SYSTEM", key: "VAULT", rare: true }
     );
-    pulseBody("vault-hit-2", 420);
+    pulseBody("vault-hit-2", 520);
+    jitterBody(1200);
   }
 
   return { ok: true, already, fragments, rank, phase };
@@ -288,9 +327,7 @@ function decodeSecretPayloadToEntry(secretPayload, meta = {}) {
 }
 
 /* ================================
-   Failure engine (ARCHITECTED)
-   - Must match app.js expectations:
-     DENIED -> ALERT -> HINT -> DESTABILIZE -> LOCKOUT (at 20)
+   Failure engine
    ================================ */
 const FAIL = { bySignal: new Map() };
 
@@ -302,13 +339,6 @@ function bumpFail(signalId) {
   const n = (FAIL.bySignal.get(k) || 0) + 1;
   FAIL.bySignal.set(k, n);
   return n;
-}
-
-function pulseBody(cls, ms = 260) {
-  try {
-    document.body.classList.add(cls);
-    setTimeout(() => document.body.classList.remove(cls), ms);
-  } catch {}
 }
 
 function leakSnippet(maxLen) {
@@ -329,12 +359,15 @@ export function vaultReject(signalId = "UNKNOWN", difficulty = 1) {
   setPhase("REJECTED");
   setStatus("incorrect");
   HOOKS.beep?.("bad");
-  pulseBody("vault-hit", 220);
 
-  // LOCKOUT is controlled by app.js at 20, but we also return stage for UI
+  // ✅ Use only classes that exist in your CSS
+  pulseBody("vault-hit", 220);
+  jitterBody(700);
+
   if (n >= 20) {
     hintCard("⚠ LOCKOUT.\nToo many failures.\nSession termination imminent.", { mode: "SYSTEM", key: "LOCKOUT", rare: true });
     pulseBody("vault-hit-2", 420);
+    jitterBody(1200);
     return { count: n, stage: "LOCKOUT", snippet: "SESSION TERMINATED" };
   }
 
@@ -357,17 +390,18 @@ export function vaultReject(signalId = "UNKNOWN", difficulty = 1) {
       { mode: "SYSTEM", key: "HINT", rare: true }
     );
     pulseBody("vault-hit-2", 360);
+    jitterBody(900);
     return { count: n, stage: "HINT", snippet };
   }
 
-  const level = Math.min(5, Math.max(1, Number(difficulty) || 1));
   const snippet = leakSnippet(70);
   hintCard(
     "⟡ DESTABILIZING.\nMultiple failures detected.\nStop brute-forcing. Re-interpret the prompt." +
       (snippet ? `\n⟡ LEAK: ${snippet}` : ""),
     { mode: "SYSTEM", key: `FAILx${n}`, rare: true }
   );
-  pulseBody(`vault-hit-${level}`, 320);
+  pulseBody("vault-hit-2", 320);
+  jitterBody(800);
   return { count: n, stage: "DESTABILIZE", snippet: snippet ? `LEAK: ${snippet}` : "" };
 }
 
@@ -378,9 +412,6 @@ export function resetRejectCounter(signalId = "UNKNOWN") {
   FAIL.bySignal.delete(sigKey(signalId));
 }
 
-/**
- * Optional debug helper
- */
 export function getEngineVersion() {
   return ENGINE_VERSION;
 }
@@ -425,8 +456,7 @@ export function initVoidUI(
     UI.newestBtn.addEventListener("click", () => jumpToNewest({ force: true }));
   }
 
-  // ✅ FIX: PREPEND stream means NEWEST is at scrollTop=0.
-  // Show "↑ NEWEST" when user scrolls DOWN away from the top.
+  // ✅ PREPEND stream means NEWEST is at scrollTop=0.
   if (UI.streamEl && UI.newestBtn && !WIRED.scrollWatch) {
     WIRED.scrollWatch = true;
     const onScroll = () => {
@@ -540,6 +570,8 @@ export async function synthesizeFromPayload(secretPayloadLine, baseImageUrl = ".
 
     hintCard("⟡ VAULT SYNTHESIZED.\nFragments loaded into memory.", { mode: "SYSTEM", key: sid, rare: true });
     HOOKS.beep?.("ok");
+    pulseBody("vault-hit", 240);
+    jitterBody(800);
 
     return true;
   } finally {
@@ -554,7 +586,6 @@ export function unlockHintByKey(keyOrFragment) {
   let v = String(keyOrFragment || "").trim();
   if (!v) return;
 
-  // allow direct paste of KEY::VALUE (dev/testing secret_payload)
   const kv = v.match(/^(0x[0-9a-f]+)\s*::\s*(.+)$/i);
   if (kv) {
     const key = kv[1].toUpperCase();
@@ -563,13 +594,11 @@ export function unlockHintByKey(keyOrFragment) {
     return;
   }
 
-  // encrypted fragment pasted directly
   if (isEncryptedFragment(v)) {
     promptDecryptAndReveal(v);
     return;
   }
 
-  // extract first 0x... anywhere
   const m = v.match(/0x[0-9a-f]+/i);
   if (m) v = m[0];
   v = v.toUpperCase();
@@ -579,6 +608,7 @@ export function unlockHintByKey(keyOrFragment) {
     setPhase("LOCKED");
     HOOKS.beep?.("bad");
     pulseBody("vault-hit", 220);
+    jitterBody(700);
     return;
   }
 
@@ -588,6 +618,7 @@ export function unlockHintByKey(keyOrFragment) {
     setPhase("MISS");
     HOOKS.beep?.("bad");
     pulseBody("vault-hit", 220);
+    jitterBody(700);
     return;
   }
 
@@ -612,12 +643,17 @@ async function promptDecryptAndReveal(fragment) {
     setStatus("decrypted");
     setPhase("DECRYPTED");
     HOOKS.beep?.("rare");
-  } catch {
+    pulseBody("vault-hit-2", 360);
+    jitterBody(1000);
+  } catch (e) {
+    // show exact reason in console (helps you debug)
+    console.warn("[decrypt] failed:", e?.message || e);
     hintCard("🜏 Decrypt failed (wrong key or tampered).", { mode: "SYSTEM", key: "AES" });
     setStatus("decrypt failed");
     setPhase("REJECTED");
     HOOKS.beep?.("bad");
     pulseBody("vault-hit-2", 320);
+    jitterBody(900);
   }
 }
 
@@ -630,6 +666,7 @@ function reveal(enc, meta) {
     setPhase("ERROR");
     HOOKS.beep?.("bad");
     pulseBody("vault-hit-2", 320);
+    jitterBody(900);
     return;
   }
 
@@ -659,7 +696,8 @@ function reveal(enc, meta) {
   setStatus("unlocked");
   setPhase("UNLOCKED");
   HOOKS.beep?.("ok");
-  pulseBody("vault-hit", 220);
+  pulseBody("vault-hit", 240);
+  jitterBody(800);
 }
 
 function base64ToUtf8(b64) {

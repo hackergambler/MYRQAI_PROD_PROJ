@@ -1,12 +1,9 @@
-// app.js (SESSION RANDOM SINGLE-FRAGMENT GAME LOOP) — ENGINE + PROGRESSION (LOCAL VAULT) + OPTION A LOGS UI
-// ✅ Persistent progression (localStorage via vault-engine.js)
-// ✅ Session-random gameplay loop (1 fragment at a time)
-// ✅ Phase Gates enforced (won’t pick locked signals)
-// ✅ Synchronicity meter reflects REAL progress (solvedCount / total)
-// ✅ URL solved_* flags kept only as cosmetic/share
-// ✅ Clear Progress clears session + URL + local progression
-// ✅ Option A: Recovered Logs panel + Log Modal (click entry to open + copy)
-// ✅ Completion FX overlay (no HTML changes required): triggers at 100 fragments
+// app.js (FIXED) — stronger FX + reliable class retrigger + better debug + safe guards
+// ✅ Adds pulse()/jitter() that FORCE reflow so animations retrigger even when class already present
+// ✅ Adds success/fail FX in solveActive() so you ALWAYS see something
+// ✅ Adds synth success/fail FX + better terminal hints
+// ✅ Adds tiny debug prints (helps confirm caching / engine loaded)
+// ✅ Keeps your original logic + UI wiring unchanged
 
 import {
   initVoidUI,
@@ -21,13 +18,13 @@ import {
   vaultReject,
   resetRejectCounter,
 
-  // progression + logs (from updated vault-engine.js)
+  // progression + logs
   getProgress,
   onSolveSuccess,
   isSignalUnlocked,
   resetProgress,
   getVaultLog,
-  clearVaultLog, // ✅ REQUIRED (your previous code was incorrectly using resetProgress for log clear)
+  clearVaultLog,
 } from "./vault-engine.js";
 
 const PUZZLES_URL = window.__PUZZLES_URL__ || "./puzzles.master.json";
@@ -274,6 +271,56 @@ function markSessionSeen(id) { const s = getSessionSeen(); s.add(id); writeSet(S
 function markSessionSolved(id) { const s = getSessionSolved(); s.add(id); writeSet(S_SOLVED, s); }
 
 /* =======================
+   Hard FX helpers (FORCE RETRIGGER)
+   ======================= */
+function forceReflow() {
+  try { void document.body.offsetHeight; } catch {}
+}
+
+function pulse(cls, ms = 280) {
+  try {
+    document.body.classList.remove(cls);
+    forceReflow();
+    document.body.classList.add(cls);
+    setTimeout(() => document.body.classList.remove(cls), ms);
+  } catch {}
+}
+
+function clearJitterClasses() {
+  try {
+    [...document.body.classList].forEach((c) => {
+      if (c.startsWith("signal-jitter-")) document.body.classList.remove(c);
+    });
+  } catch {}
+}
+
+function jitter(level = 1, ms = 700) {
+  try {
+    clearJitterClasses();
+    forceReflow();
+    const cls = "signal-jitter-" + Math.max(1, Math.min(9, Math.floor(Number(level) || 1)));
+    document.body.classList.add(cls);
+    setTimeout(() => {
+      document.body.classList.remove(cls);
+      clearJitterClasses();
+    }, ms);
+  } catch {}
+}
+
+/* Backwards compatible name used elsewhere */
+let jitterClassTimer = null;
+function difficultyJitter(level = 1) {
+  clearTimeout(jitterClassTimer);
+  clearJitterClasses();
+  const cls = "signal-jitter-" + Math.max(1, Math.min(9, Math.floor(Number(level) || 1)));
+  document.body.classList.add(cls);
+  jitterClassTimer = setTimeout(() => {
+    document.body.classList.remove(cls);
+    clearJitterClasses();
+  }, 520);
+}
+
+/* =======================
    Sound (safe)
    ======================= */
 const Sound = (() => {
@@ -356,25 +403,6 @@ function clearSolvedUrlFlags() {
   const keys = Array.from(url.searchParams.keys());
   for (const k of keys) if (k.startsWith("solved_")) url.searchParams.delete(k);
   history.replaceState({}, "", url.toString());
-}
-
-/* =======================
-   Jitter (finite)
-   ======================= */
-let jitterClassTimer = null;
-function clearJitterClasses() {
-  const el = document.body;
-  [...el.classList].forEach((c) => { if (c.startsWith("signal-jitter-")) el.classList.remove(c); });
-}
-function difficultyJitter(level = 1) {
-  clearTimeout(jitterClassTimer);
-  clearJitterClasses();
-  const cls = "signal-jitter-" + level;
-  document.body.classList.add(cls);
-  jitterClassTimer = setTimeout(() => {
-    document.body.classList.remove(cls);
-    clearJitterClasses();
-  }, 520);
 }
 
 /* =======================
@@ -472,7 +500,6 @@ function renderSingleSignal(sig) {
    ======================= */
 function safeDate(ts) {
   if (!ts) return "";
-  // vault-engine stores ISO string by default; support numeric too
   try { return new Date(ts).toLocaleString(); } catch { return ""; }
 }
 
@@ -494,7 +521,7 @@ function getLogArray() {
 function renderVaultLog() {
   if (!els.vaultLogList || !els.vaultLogCount) return;
 
-  const log = getLogArray(); // engine already returns newest-first (unshift)
+  const log = getLogArray();
   els.vaultLogCount.textContent = String(log.length);
 
   if (log.length === 0) {
@@ -507,7 +534,6 @@ function renderVaultLog() {
     return;
   }
 
-  // Keep engine order (newest first) to match UI expectation
   els.vaultLogList.innerHTML = log
     .map((e, i) => {
       const id = escapeHtml(e.signal_id || "0x???");
@@ -550,7 +576,6 @@ function openLogModal(entry) {
   els.logModal.classList.add("show");
   els.logModal.setAttribute("aria-hidden", "false");
 
-  // also print into terminal stream (nice hacker feel)
   revealDirectHint(`⟡ RECOVERED LOG OPENED\nID: ${sid}\n${when ? `TIME: ${when}\n` : ""}\n${text}`, {
     mode: "SYSTEM",
     key: "LOG",
@@ -586,7 +611,6 @@ function wireVaultLogUI() {
     Sound.tick("sys");
   });
 
-  // ✅ FIX: clear ONLY the log (not full reset)
   els.vaultLogClear?.addEventListener("click", () => {
     const ok = typeof window.confirm === "function" ? confirm("Clear recovered logs? (Progress stays)") : true;
     if (!ok) return;
@@ -594,7 +618,6 @@ function wireVaultLogUI() {
     try {
       clearVaultLog?.();
     } catch {
-      // If engine missing, fail gracefully
       setStatus("log clear failed");
       Sound.tick("bad");
       return;
@@ -603,15 +626,16 @@ function wireVaultLogUI() {
     renderVaultLog();
     setStatus("log cleared");
     Sound.tick("warn");
+    pulse("vault-hit", 220);
+    jitter(2, 520);
   });
 
-  // open entry click (event delegation)
   els.vaultLogList?.addEventListener("click", (e) => {
     const item = e.target?.closest?.(".vaultlog-item");
     if (!item) return;
 
     const idx = Number(item.getAttribute("data-log-idx"));
-    const list = getLogArray(); // same order as render
+    const list = getLogArray();
     const entry = list[idx];
     if (entry) openLogModal(entry);
   });
@@ -626,7 +650,6 @@ function wireVaultLogUI() {
     if (entry) openLogModal(entry);
   });
 
-  // modal controls
   els.logClose?.addEventListener("click", closeLogModal);
   els.logCopy?.addEventListener("click", copyLogText);
   els.logModal?.addEventListener("click", (e) => {
@@ -797,8 +820,6 @@ async function showCompletionFX() {
   right.style.flexWrap = "wrap";
 
   const codeEl = document.createElement("span");
-  // If vault-engine already prints deterministic code in terminal, you can paste it manually.
-  // Here we still show a simple badge; your engine has the real VAULT-XXXXXXXX code in terminal.
   codeEl.textContent = code;
 
   const copyBtn = document.createElement("button");
@@ -837,7 +858,6 @@ async function showCompletionFX() {
   reset.textContent = "RESET PROGRESS";
   reset.addEventListener("click", () => {
     overlay.remove();
-    // trigger the same behavior as menu reset
     els.clearProgress?.click?.();
   });
 
@@ -858,10 +878,9 @@ async function showCompletionFX() {
 
   document.body.appendChild(overlay);
 
-  // extra feel
   Sound.tick("rare");
-  document.body.classList.add("vault-hit-2");
-  setTimeout(() => document.body.classList.remove("vault-hit-2"), 360);
+  pulse("vault-hit-2", 360);
+  jitter(9, 900);
 }
 
 function maybeTriggerCompletionFX() {
@@ -896,7 +915,6 @@ async function scanForSignals() {
 
     parsed.sort((a, b) => parseHexIdToInt(a.signal_id) - parseHexIdToInt(b.signal_id));
 
-    // assign 1..N index for Phase Gates
     parsed.forEach((p, i) => (p.__index = i + 1));
     PUZZLES = parsed;
 
@@ -905,6 +923,8 @@ async function scanForSignals() {
 
     setStatus(`signals loaded (${PUZZLES.length})`);
     Sound.tick("sys");
+    pulse("vault-hit", 220);
+    jitter(1, 420);
 
     const chosen = pickRandomUnsolved();
     if (chosen) {
@@ -928,7 +948,6 @@ async function scanForSignals() {
       jumpToNewest?.();
     }
 
-    // if user already completed earlier, show FX once
     maybeTriggerCompletionFX();
   } catch (e) {
     const msg = e?.message || "scan failed";
@@ -939,6 +958,8 @@ async function scanForSignals() {
     );
     revealDirectHint("🜏 SCAN FAILED.\nEnsure puzzles.master.json exists and is served.", { mode: "SYSTEM", key: "SCAN" });
     Sound.tick("bad");
+    pulse("vault-hit", 260);
+    jitter(3, 720);
   } finally {
     scanning = false;
   }
@@ -963,18 +984,42 @@ async function openSignal(sig) {
     try {
       await synthesizeFromPayload(sig.secret_payload, BASE_VAULT_IMG, { signal_id: sig.signal_id });
       synthesizedFor = sig.signal_id;
+
       setPhase("READY");
       setStatus("signal stabilized");
       Sound.tick("ok");
-    } catch {
+
+      // Strong visual confirmation
+      pulse("vault-hit-2", 300);
+      jitter(sig.difficulty || 1, 760);
+
+      revealDirectHint("⟡ SIGNAL STABILIZED.\nVault synthesized in RAM.\nYou may now SOLVE or UNLOCK.", {
+        mode: "SYSTEM",
+        key: sig.signal_id,
+        rare: true,
+      });
+      jumpToNewest?.();
+    } catch (e) {
       setStatus("synthesis failed");
-      revealDirectHint("🜏 SYNTHESIS FAILED.\nCheck base image path and payload integrity.", { mode: "SYSTEM", key: "SYNTH" });
+      setPhase("ERROR");
+      revealDirectHint(
+        "🜏 SYNTHESIS FAILED.\nCheck base image path and payload integrity.\n\n" +
+          "Fix checklist:\n" +
+          "• ./assets/void.png must exist\n" +
+          "• Server must serve .png with correct path\n" +
+          "• puzzle secret_payload must be intact\n",
+        { mode: "SYSTEM", key: "SYNTH" }
+      );
       Sound.tick("bad");
+      pulse("vault-hit", 260);
+      jitter(4, 820);
+      console.warn("[SYNTH FAIL]", e);
       return;
     }
   } else {
     setPhase("READY");
     setStatus("signal cached");
+    pulse("vault-hit", 180);
   }
 
   if (!els.puzzleModal) return;
@@ -1047,7 +1092,6 @@ function rejectInfo(signalId, difficulty, sig) {
    Lockout termination
    ======================= */
 function terminateSession(signalId) {
-  // session-only wipe (DO NOT wipe local progression here)
   clearSolvedUrlFlags();
 
   try {
@@ -1073,6 +1117,10 @@ Session progress lost.
 Scan again to continue.`,
     { mode: "SYSTEM", key: "LOCKOUT", rare: true }
   );
+
+  Sound.tick("bad");
+  pulse("vault-hit-2", 420);
+  jitter(6, 900);
 
   setMeter();
   showSignalsHelper("Session terminated. Press SCAN to pull a new fragment.");
@@ -1109,6 +1157,8 @@ async function solveActive() {
       showModalMessage("TYPE AN ANSWER", "warn");
       modalShake(420);
       Sound.tick("sys");
+      pulse("vault-hit", 180);
+      jitter(1, 520);
       els.puzAnswer?.focus?.();
       return;
     }
@@ -1124,7 +1174,12 @@ async function solveActive() {
       showModalMessage(ui.text, ui.type);
       modalShake(ui.shake || 520);
 
+      // FORCE visible feedback even if engine CSS is minimal
+      pulse("vault-hit", 220);
+      jitter(active.difficulty || 1, 720);
+
       if (rej.stage === "ALERT" || rej.stage === "HINT") Sound.tick("warn");
+      else Sound.tick("bad");
 
       if (rej.stage === "LOCKOUT" || rej.count >= LOCKOUT_AFTER) {
         terminateSession(active.signal_id);
@@ -1141,6 +1196,11 @@ async function solveActive() {
 
     showModalMessage("ACCEPTED • VERIFIED", "ok");
 
+    // BIG success FX
+    Sound.tick("rare");
+    pulse("vault-hit-2", 360);
+    jitter(9, 950);
+
     // Persist progression + vault log (localStorage)
     try {
       onSolveSuccess?.({
@@ -1151,7 +1211,9 @@ async function solveActive() {
         secret_payload: active.secret_payload,
         unlock_fragment: active.unlock_fragment,
       });
-    } catch {}
+    } catch (e) {
+      console.warn("[onSolveSuccess] failed", e);
+    }
 
     // Cosmetic URL flag (optional)
     markSolvedUrl(active.signal_id);
@@ -1164,10 +1226,18 @@ async function solveActive() {
     renderVaultLog();
 
     setStatus("unlocked");
-    Sound.tick("rare");
 
     // Reveal fragment in terminal using existing pipeline
-    unlockHintByKey(active.signal_id);
+    try {
+      unlockHintByKey(active.signal_id);
+    } catch (e) {
+      console.warn("[unlockHintByKey] failed", e);
+      revealDirectHint("🜏 UNLOCK FAILED.\nVault might not be ready.\nClick the Signal Card first.", {
+        mode: "SYSTEM",
+        key: "UNLOCK",
+        rare: true,
+      });
+    }
 
     const p = getProgress?.() || {};
     revealDirectHint(
@@ -1250,7 +1320,7 @@ function wireUI() {
     onboarding: document.getElementById("onboarding"),
     closeOnboarding: document.getElementById("closeOnboarding"),
 
-    // ✅ Option A log UI
+    // logs UI
     vaultLogList: document.getElementById("vaultLogList"),
     vaultLogCount: document.getElementById("vaultLogCount"),
     vaultLogRefresh: document.getElementById("vaultLogRefresh"),
@@ -1274,14 +1344,19 @@ function wireUI() {
     { beep: (t) => Sound.tick(t) }
   );
 
+  // debug: confirms engine is callable + progress is readable (also helps cache debugging)
+  try {
+    const p = getProgress?.() || {};
+    console.log("[APP] engine OK • progress:", { fragments: p.fragments, rank: p.rank, solved: p.solvedCount });
+  } catch (e) {
+    console.warn("[APP] getProgress failed:", e);
+  }
+
   if (els.urlLabel) els.urlLabel.textContent = PUZZLES_URL;
   loadBackground(window.__BG_IMAGE__, BASE_VAULT_IMG);
 
-  // initial meter + log UI from stored progress
   setMeter();
   wireVaultLogUI();
-
-  // if already completed from previous runs, show once
   maybeTriggerCompletionFX();
 
   els.scanBtn?.addEventListener("click", () => scanForSignals());
@@ -1291,8 +1366,11 @@ function wireUI() {
     if (!v) {
       setStatus("type a key (0x...) or paste enc:v1 fragment");
       Sound.tick("sys");
+      pulse("vault-hit", 160);
       return;
     }
+    pulse("vault-hit", 200);
+    jitter(2, 540);
     unlockHintByKey(v);
   });
 
@@ -1315,6 +1393,8 @@ function wireUI() {
 
     setStatus("help loaded");
     Sound.tick("sys");
+    pulse("vault-hit", 180);
+    jitter(1, 520);
     jumpToNewest?.();
   });
 
@@ -1322,6 +1402,7 @@ function wireUI() {
     clearStream();
     setStatus("stream cleared");
     Sound.tick("sys");
+    pulse("vault-hit", 160);
   });
 
   // Puzzle modal controls
@@ -1378,6 +1459,7 @@ function wireUI() {
     els.soundToggle.textContent = "SOUND: " + (on ? "ON" : "OFF");
     setStatus(on ? "sound enabled" : "sound disabled");
     Sound.tick("sys");
+    pulse("vault-hit", 180);
   });
 
   // Challenge
@@ -1391,6 +1473,8 @@ function wireUI() {
     navigator.clipboard?.writeText(link.toString()).catch(() => {});
     revealDirectHint("⟡ CHALLENGE LINK COPIED:\n" + link.toString(), { mode: "SYSTEM", key: "CHALLENGE", rare: true });
     Sound.tick("rare");
+    pulse("vault-hit-2", 320);
+    jitter(7, 820);
     jumpToNewest?.();
   }
   els.genChallenge?.addEventListener("click", genChallenge);
@@ -1422,7 +1506,6 @@ function wireUI() {
 
     try { resetProgress?.(); } catch {}
 
-    // allow completion FX to fire again later
     COMPLETION_FIRED = false;
 
     setMeter();
@@ -1433,6 +1516,11 @@ function wireUI() {
       key: "RESET",
       rare: true,
     });
+
+    Sound.tick("warn");
+    pulse("vault-hit-2", 360);
+    jitter(5, 900);
+
     jumpToNewest?.();
     showSignalsHelper("Press SCAN to pull a fragment…");
   });
@@ -1453,6 +1541,8 @@ async function boot() {
       `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${p.fragments || 0}/100`,
     { mode: "SYSTEM", key: "BOOT", rare: true }
   );
+  pulse("vault-hit", 220);
+  jitter(2, 620);
   jumpToNewest?.();
 }
 

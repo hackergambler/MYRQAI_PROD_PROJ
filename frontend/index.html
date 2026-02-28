@@ -117,19 +117,15 @@ button:hover {
   text-decoration:none;
   position:relative;
   overflow:hidden;
-
   background:linear-gradient(145deg, rgba(0,255,65,.12), rgba(2,6,23,.95));
   border:1px solid rgba(0,255,65,.6);
-
   color:#fff;
   transition:.45s cubic-bezier(.2,.8,.2,1);
-
   box-shadow:
     0 0 25px rgba(0,255,65,.25),
     inset 0 0 20px rgba(0,255,65,.08);
 }
 
-/* animated border sweep */
 .vault-frame::before{
   content:"";
   position:absolute;
@@ -150,7 +146,6 @@ button:hover {
   100%{background-position:200% 0;}
 }
 
-/* scanning glow */
 .vault-frame::after{
   content:"";
   position:absolute;
@@ -158,12 +153,7 @@ button:hover {
   left:-100%;
   width:100%;
   height:100%;
-  background:linear-gradient(
-    90deg,
-    transparent,
-    rgba(0,255,65,.15),
-    transparent
-  );
+  background:linear-gradient(90deg, transparent, rgba(0,255,65,.15), transparent);
   animation:vaultScan 4s infinite;
 }
 
@@ -196,7 +186,83 @@ button:hover {
   color:#caffdf;
 }
 
-/* ===== NEW: paired encrypt/decrypt frame (one box) ===== */
+/* ===== GHOST_TRACE GEM (THE PREMIUM BRIDGE) ===== */
+.gem-frame {
+  display: block;
+  margin-bottom: 18px;
+  padding: 28px;
+  border-radius: 14px;
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(168, 85, 247, 0.18), rgba(2, 6, 23, 0.98));
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  color: #fff;
+  transition: .45s cubic-bezier(.2, .8, .2, 1);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.2), inset 0 0 15px rgba(168, 85, 247, 0.1);
+}
+
+.gem-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  border-radius: 14px;
+  background: linear-gradient(120deg, transparent, #a855f7, #38bdf8, #00ff41, transparent);
+  background-size: 200% 200%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: gemShine 4s linear infinite;
+}
+
+@keyframes gemShine {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gem-frame:hover {
+  transform: translateY(-5px) scale(1.03);
+  box-shadow: 0 0 40px rgba(168, 85, 247, 0.7), 0 0 20px rgba(56, 189, 248, 0.4);
+}
+
+.gem-title {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #fff;
+  text-shadow: 0 0 15px rgba(168, 85, 247, 1);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gem-status-pulse {
+  width: 10px;
+  height: 10px;
+  background: #00ff41;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #00ff41;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.gem-sub {
+  font-size: 13px;
+  letter-spacing: 1px;
+  line-height: 1.6;
+  opacity: .95;
+  color: #f3e8ff;
+}
+
+/* ===== CRYPTO FRAME ===== */
 .crypto-frame{
   margin-top: 12px;
   padding: 18px;
@@ -254,7 +320,7 @@ button:hover {
   .crypto-grid{ grid-template-columns: 1fr; }
 }
 
-/* ===== Persona Suite (ONE FRAME) ===== */
+/* ===== Persona Suite ===== */
 .persona-frame{
   margin-top: 20px;
   padding: 18px;
@@ -346,11 +412,6 @@ button:hover {
   text-transform: uppercase;
 }
 
-@media (max-width: 520px){
-  .persona-btn{ font-size: 12px; }
-}
-
-/* ===== Title chip (kept) ===== */
 .main-title {
   font-size: 16px;
   letter-spacing: 3px;
@@ -366,7 +427,7 @@ button:hover {
   20%, 24%, 55% { opacity: 0.3; }
 }
 
-/* ===== ULTRA PREMIUM STEALTH MODE (kept) ===== */
+/* ===== ULTRA PREMIUM STEALTH MODE ===== */
 .ghost-module{
   position:relative;
   display:block;
@@ -392,8 +453,8 @@ button:hover {
   border-radius:14px;
   background:linear-gradient(120deg, transparent, #ff003c, transparent);
   -webkit-mask:
-     linear-gradient(#000 0 0) content-box,
-     linear-gradient(#000 0 0);
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
   -webkit-mask-composite:xor;
   mask-composite:exclude;
   animation:stealth-border 4s linear infinite;
@@ -411,12 +472,7 @@ button:hover {
   left:-100%;
   width:100%;
   height:100%;
-  background:linear-gradient(
-    90deg,
-    transparent,
-    rgba(255,0,60,.15),
-    transparent
-  );
+  background:linear-gradient(90deg, transparent, rgba(255,0,60,.15), transparent);
   animation:stealth-scan 3s infinite;
 }
 
@@ -477,14 +533,12 @@ button:hover {
   [ SHADOW_MESSAGE_VAULT ]
 </div>
 
-<!-- ✅ HERO OPTION A -->
 <div class="hero">
   <h1>THE GHOST SIGNAL VAULT</h1>
   <p>Invisible messages • Image vault • Persona scan • Zero logs</p>
 </div>
 
 <div class="box">
-  <!-- GHOST SIGNAL VAULT FRAME -->
   <a href="./void/void.html" class="vault-frame">
     <div class="vault-title">🜏 GHOST SIGNAL VAULT</div>
     <div class="vault-sub">
@@ -493,7 +547,18 @@ button:hover {
     </div>
   </a>
 
-  <!-- ✅ One frame for BOTH encrypt + decrypt (no disturbance to links) -->
+  <a href="ghost/ghost.html" class="gem-frame">
+    <div class="gem-title">
+      <div class="gem-status-pulse"></div>
+      GHOST_TRACE SECURE BRIDGE
+    </div>
+    <div class="gem-sub">
+      Ephemeral peer-to-peer WebSocket tunnel. 
+      Volatile XOR encryption with signal purges every 10 seconds. 
+      Zero-trace communication layer.
+    </div>
+  </a>
+
   <div class="crypto-frame">
     <div class="frame-title">SECURE MESSAGE CONSOLE</div>
     <div class="frame-sub">
@@ -506,7 +571,6 @@ button:hover {
     </div>
   </div>
 
-  <!-- ✅ ONE FRAME: Persona Scanner + Persona Pro + Future AI -->
   <div class="persona-frame">
     <div class="persona-head">
       <div class="persona-title">🧠 AI PERSONA SUITE</div>
@@ -527,8 +591,8 @@ button:hover {
       🕵️ STEALTH MODE — IMAGE STEGANOGRAPHY
     </div>
     <div class="ghost-desc">
-	High-strength AES encryption embedded inside PNG images.<br>
-	Covert transmission layer. Zero logs. Stealth payload delivery.
+    High-strength AES encryption embedded inside PNG images.<br>
+    Covert transmission layer. Zero logs. Stealth payload delivery.
     </div>
   </a>
 

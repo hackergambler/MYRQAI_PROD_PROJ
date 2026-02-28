@@ -1,24 +1,36 @@
-name = "myrqai-development"
+name = "myrqai-worker"
 main = "worker.js"
 compatibility_date = "2026-02-20"
-
 compatibility_flags = ["nodejs_compat"]
 
+# Global Migrations (Keep this at the top level)
+[[migrations]]
+tag = "v1" 
+new_classes = ["GhostRoom"]
 
-# ---------- DEV ----------
+# ---------- DEV ENVIRONMENT ----------
 [env.dev]
 name = "myrqai-development"
-compatibility_flags = ["nodejs_compat"]
+
+# You must repeat the binding here for the 'dev' environment
+[env.dev.durable_objects]
+bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
 
 [env.dev.vars]
 ENV = "dev"
-ADMIN_TOKEN = "MYRQAI_SUPER_SECRET_123"
+ADMIN_TOKEN = "MYRQAI_DEV_SECRET_123"
+# UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)
 
-# ---------- PROD ----------
+
+# ---------- PROD ENVIRONMENT ----------
 [env.prod]
 name = "myrqai-prod"
-compatibility_flags = ["nodejs_compat"]
 
-[env.dev.vars]
-ENV = "PROD"
-ADMIN_TOKEN = "MYRQAI_SUPER_SECRET_123"
+# You must repeat the binding here for the 'prod' environment
+[env.prod.durable_objects]
+bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
+
+[env.prod.vars]
+ENV = "prod"
+ADMIN_TOKEN = "MYRQAI_DEV_SECRET_123"
+# UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)
