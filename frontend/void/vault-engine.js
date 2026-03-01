@@ -1,16 +1,21 @@
-// vault-engine.js (UPDATED + FIXED)
-// ✅ Fixes stage mismatch with app.js (ALERT / HINT / LOCKOUT / DESTABILIZE)
-// ✅ Adds clearVaultLog() (log-only clearing) — REQUIRED by updated app.js
-// ✅ Fixes "newest button" logic for PREPEND stream (shows when you scroll DOWN/away from top)
-// ✅ Adds deterministic completion code + still prints VAULT OPEN at 100 fragments
-// ✅ Prevents duplicate log entries (solve + unlock) safely
-// ✅ FX FIX: reliably retriggers pulse + jitter so you ALWAYS see animations
+// vault-engine.js (FINAL FIX) — FULL FILE (NO MISSING PARTS)
+// ✅ FIXES: your “no animations” problem by moving FX classes off <body> onto #hudFx overlay layer
+// ✅ Keeps phase badge pop (rank-pop) reliable
+// ✅ Uses your existing void.html overlay: #vaultComplete (copy/close buttons) + click outside + ESC close
+// ✅ Keeps exports/signatures compatible with app.js
+//
+// IMPORTANT:
+// - Make sure void.html contains: <div id="hudFx" aria-hidden="true"></div> (recommended)
+// - If #hudFx is missing, FX falls back to <body> (still works, but conflicts are more likely)
 
 import { loadImageVault } from "./image-vault.js";
 import { isEncryptedFragment, decryptFragment } from "./crypto-vault.js";
 
-export const ENGINE_VERSION = "vault-engine@2026.02.27-r8-fxfix"; // bump to confirm cache
+export const ENGINE_VERSION = "vault-engine@2026.02.28-r11a-hudfx";
 
+/* ================================
+   Globals
+   ================================ */
 let UI = { streamEl: null, statusEl: null, badgeEl: null, newestBtn: null };
 let HOOKS = { beep: null };
 let HINT_MASK = "";
@@ -20,7 +25,10 @@ let MAP = new Map();
 let LAST_SYNTH_KEY = null;
 
 // prevent double-binding if module hot reloads / re-imports
-let WIRED = { newestClick: false, scrollWatch: false };
+let WIRED = { newestClick: false, scrollWatch: false, overlayClose: false, escClose: false };
+
+// overlay state
+let OVERLAY = { el: null, hideTimer: null, lastCode: "" };
 
 /* ================================
    Storage helpers (LOCAL ONLY, SAFE)
@@ -46,11 +54,13 @@ const STORAGE_KEYS = {
   lastSeen: `${STORAGE_PREFIX}:lastSeen`,
 };
 
+// Phase gates are INDEX-based (1..100). app.js assigns __index after sorting by hex id.
+// isSignalUnlocked(idx) uses FRAGMENTS thresholds to open ranges.
 const PHASE_GATES = [
-  { name: "PHASE I", minFragments: 0,  from: 1,  to: 25 },
-  { name: "PHASE II", minFragments: 10, from: 26, to: 50 },
+  { name: "PHASE I",   minFragments: 0,  from: 1,  to: 25 },
+  { name: "PHASE II",  minFragments: 10, from: 26, to: 50 },
   { name: "PHASE III", minFragments: 30, from: 51, to: 75 },
-  { name: "PHASE IV", minFragments: 60, from: 76, to: 100 },
+  { name: "PHASE IV",  minFragments: 60, from: 76, to: 100 },
 ];
 
 const RANKS = [
@@ -81,7 +91,7 @@ function readFragments() {
   return Number.isFinite(n) ? n : 0;
 }
 function writeFragments(n) {
-  const v = Math.max(0, Math.floor(Number(n) || 0));
+  const v = Math.max(0, Math.min(100, Math.floor(Number(n) || 0)));
   storageSet(STORAGE_KEYS.fragments, String(v));
 }
 
@@ -138,6 +148,9 @@ export function resetProgress() {
   storageRemove(STORAGE_KEYS.vaultLog);
   storageRemove(STORAGE_KEYS.lastSeen);
 
+  // Reset failure counters too (best-effort)
+  try { FAIL.bySignal.clear(); } catch {}
+
   try {
     hintCard("⟡ LOCAL VAULT RESET.\nAll fragments cleared.", { mode: "SYSTEM", key: "RESET", rare: true });
   } catch {}
@@ -176,37 +189,189 @@ export function isSignalUnlocked(signalIndex) {
 /* ================================
    ✅ FX helpers (retrigger-safe)
    ================================ */
-function forceReflow() {
-  try { void document.body.offsetHeight; } catch {}
+
+// Use #hudFx to avoid body animation conflicts (hud-flash vs vault-hit vs jitter)
+function fxEl() {
+  return document.getElementById("hudFx") || document.body;
+}
+
+function forceReflow(el) {
+  try { void (el || document.body).offsetHeight; } catch {}
 }
 
 function pulseBody(cls, ms = 260) {
   try {
-    // retrigger even if class already present
-    document.body.classList.remove(cls);
-    forceReflow();
-    document.body.classList.add(cls);
-    setTimeout(() => document.body.classList.remove(cls), ms);
+    const el = fxEl();
+    el.classList.remove(cls);
+    forceReflow(el);
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), ms);
   } catch {}
 }
 
 let _jitterN = 0;
 function jitterBody(ms = 900) {
-  // uses your CSS: body[class*="signal-jitter-"] { animation: jitter ... }
+  // works with CSS: #hudFx[class*="signal-jitter-"] OR body[class*="signal-jitter-"]
   try {
-    // remove any existing jitter classes
-    const all = Array.from(document.body.classList);
-    for (const c of all) {
-      if (c.startsWith("signal-jitter-")) document.body.classList.remove(c);
-    }
-    forceReflow();
+    const el = fxEl();
+    const all = Array.from(el.classList);
+    for (const c of all) if (c.startsWith("signal-jitter-")) el.classList.remove(c);
+    forceReflow(el);
 
     _jitterN = (_jitterN + 1) % 9;
     const cls = `signal-jitter-${_jitterN}`;
-    document.body.classList.add(cls);
-    setTimeout(() => document.body.classList.remove(cls), ms);
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), ms);
   } catch {}
 }
+
+function hudFlash(shock = false, ms = 620) {
+  try {
+    const el = fxEl();
+    const cls = shock ? "hud-shock" : "hud-flash";
+    el.classList.remove("hud-flash", "hud-shock");
+    forceReflow(el);
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), ms);
+  } catch {}
+}
+
+function badgePop() {
+  try {
+    if (!UI.badgeEl) return;
+    UI.badgeEl.classList.remove("rank-pop");
+    void UI.badgeEl.offsetHeight;
+    UI.badgeEl.classList.add("rank-pop");
+    setTimeout(() => UI.badgeEl && UI.badgeEl.classList.remove("rank-pop"), 520);
+  } catch {}
+}
+
+/* ================================
+   ✅ Completion overlay (uses void.html #vaultComplete)
+   ================================ */
+function ensureCompletionOverlay() {
+  try {
+    // Preferred: use existing overlay in void.html
+    let overlay = document.getElementById("vaultComplete");
+
+    // Fallback: if not present, create a minimal one (still works)
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "vaultComplete";
+      overlay.className = "vault-complete";
+      overlay.innerHTML = `
+        <div class="card">
+          <div class="title">VAULT OPEN // PROTOCOL COMPLETE</div>
+          <div id="vaultCompleteText" class="text"></div>
+          <div class="modal-actions" style="margin-top:14px">
+            <button id="vaultCompleteCopy" class="btn ghost" type="button">COPY CODE</button>
+            <button id="vaultCompleteClose" class="btn primary" type="button">CLOSE</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    OVERLAY.el = overlay;
+
+    // Wire close handlers once
+    if (!WIRED.overlayClose) {
+      WIRED.overlayClose = true;
+
+      // click outside card closes
+      overlay.addEventListener("click", (e) => {
+        const card = overlay.querySelector(".card");
+        if (card && card.contains(e.target)) return;
+        hideCompletionOverlay();
+      });
+
+      // close button
+      const closeBtn = overlay.querySelector("#vaultCompleteClose");
+      if (closeBtn) closeBtn.addEventListener("click", () => hideCompletionOverlay());
+
+      // copy button
+      const copyBtn = overlay.querySelector("#vaultCompleteCopy");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", async () => {
+          const text = OVERLAY.lastCode || "";
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+            setStatus("code copied");
+            HOOKS.beep?.("ok");
+            pulseBody("vault-hit", 220);
+          } catch {
+            // fallback
+            try {
+              prompt("Copy code:", text);
+            } catch {}
+          }
+        });
+      }
+
+      // Click card to dismiss (hacker “tap to dismiss” feel)
+      const card = overlay.querySelector(".card");
+      if (card) {
+        card.style.cursor = "pointer";
+        card.addEventListener("click", () => hideCompletionOverlay());
+      }
+    }
+
+    // ESC-to-close once
+    if (!WIRED.escClose) {
+      WIRED.escClose = true;
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") hideCompletionOverlay();
+      });
+    }
+
+    return overlay;
+  } catch {
+    return null;
+  }
+}
+
+function showCompletionOverlay(text, { autoCloseMs = 0 } = {}) {
+  const overlay = ensureCompletionOverlay();
+  if (!overlay) return;
+
+  // clear any prior timer
+  if (OVERLAY.hideTimer) {
+    clearTimeout(OVERLAY.hideTimer);
+    OVERLAY.hideTimer = null;
+  }
+
+  // set text if possible
+  try {
+    const out = overlay.querySelector("#vaultCompleteText");
+    if (out) out.textContent = String(text || "");
+  } catch {}
+
+  // show
+  overlay.classList.add("show");
+  overlay.setAttribute("aria-hidden", "false");
+
+  // optional auto close
+  if (autoCloseMs && Number.isFinite(autoCloseMs) && autoCloseMs > 0) {
+    OVERLAY.hideTimer = setTimeout(() => {
+      OVERLAY.hideTimer = null;
+      hideCompletionOverlay();
+    }, autoCloseMs);
+  }
+}
+
+function hideCompletionOverlay() {
+  try {
+    const overlay = OVERLAY.el || document.getElementById("vaultComplete");
+    if (!overlay) return;
+    overlay.classList.remove("show");
+    overlay.setAttribute("aria-hidden", "true");
+  } catch {}
+}
+
+/* ================================
+   ✅ Solve success / logging
+   ================================ */
 
 /**
  * ✅ Exported: mark solved + add fragment (idempotent per signal_id).
@@ -250,13 +415,19 @@ export function onSolveSuccess(meta = {}) {
   const rank = rankForFragments(fragments);
   const phase = phaseForFragments(fragments);
 
-  // ✅ MAKE IT OBVIOUS (these exist in your CSS)
+  // ✅ FX (now uses #hudFx, so it won't conflict)
   pulseBody("vault-hit", 260);
   jitterBody(900);
-  if (rank === "PROTOCOL COMPLETE" || fragments >= 100) pulseBody("vault-hit-2", 420);
+
+  // ✅ Phase update + FX
+  setPhase(phase);
+
+  // Shock on milestone ranks / 100%
+  const milestone = (rank === "PROTOCOL COMPLETE" || fragments >= 100);
+  hudFlash(milestone, milestone ? 900 : 620);
 
   setStatus(`verified • ${rank} • ${fragments}/100`);
-  HOOKS.beep?.(rank === "PROTOCOL COMPLETE" ? "rare" : "ok");
+  HOOKS.beep?.(milestone ? "rare" : "ok");
 
   const msg =
     `✅ VERIFIED: ${sid}\n` +
@@ -269,15 +440,25 @@ export function onSolveSuccess(meta = {}) {
 
   if (fragments >= 100) {
     const code = makeCompletionCode(Object.keys(solved).sort());
-    hintCard(
+    const clearance =
       "🜏 VAULT OPEN.\nPROTOCOL COMPLETE.\n\nCLEARANCE CARD:\n" +
-        `RANK: ${rank}\n` +
-        `CODE: ${code}\n\n` +
-        "⟡ Screenshot this as proof.",
-      { mode: "SYSTEM", key: "VAULT", rare: true }
-    );
+      `RANK: ${rank}\n` +
+      `CODE: ${code}\n\n` +
+      "⟡ Screenshot this as proof.";
+
+    hintCard(clearance, { mode: "SYSTEM", key: "VAULT", rare: true });
+
     pulseBody("vault-hit-2", 520);
     jitterBody(1200);
+    hudFlash(true, 1100);
+
+    // store for copy button
+    OVERLAY.lastCode = `RANK: ${rank}\nCODE: ${code}`;
+
+    // ✅ SHOW overlay (click / ESC closes)
+    showCompletionOverlay(clearance, {
+      autoCloseMs: 0, // set 6000 if you want auto-close after 6s
+    });
   }
 
   return { ok: true, already, fragments, rank, phase };
@@ -354,15 +535,17 @@ function leakSnippet(maxLen) {
  *  { count, stage: "DENIED"|"ALERT"|"HINT"|"DESTABILIZE"|"LOCKOUT", snippet }
  */
 export function vaultReject(signalId = "UNKNOWN", difficulty = 1) {
+  void difficulty;
+
   const n = bumpFail(signalId);
 
   setPhase("REJECTED");
   setStatus("incorrect");
   HOOKS.beep?.("bad");
 
-  // ✅ Use only classes that exist in your CSS
   pulseBody("vault-hit", 220);
   jitterBody(700);
+  hudFlash(n >= 2, n >= 2 ? 900 : 620);
 
   if (n >= 20) {
     hintCard("⚠ LOCKOUT.\nToo many failures.\nSession termination imminent.", { mode: "SYSTEM", key: "LOCKOUT", rare: true });
@@ -434,6 +617,9 @@ export function initVoidUI(
   UI.newestBtn = document.querySelector(newestBtnSelector) || null;
   HOOKS = { ...HOOKS, ...hooks };
 
+  // Ensure completion overlay is wired early
+  ensureCompletionOverlay();
+
   try {
     const p = getProgress();
     console.log(`[${ENGINE_VERSION}] loaded`, {
@@ -443,12 +629,10 @@ export function initVoidUI(
       newestBtn: !!UI.newestBtn,
       progress: { fragments: p.fragments, rank: p.rank, phase: p.phase, solved: p.solvedCount },
     });
-  } catch {}
 
-  try {
-    const p = getProgress();
-    if (UI.badgeEl) UI.badgeEl.innerText = "READY";
-    if (UI.statusEl) UI.statusEl.innerText = `ready • ${p.rank} • ${p.fragments}/100`;
+    // ✅ SHOW CURRENT PHASE/RANK ON BOOT
+    setStatus(`ready • ${p.rank} • ${p.fragments}/100`);
+    setPhase(p.phase);
   } catch {}
 
   if (UI.newestBtn && !WIRED.newestClick) {
@@ -473,7 +657,17 @@ export function setStatus(msg) {
 }
 
 export function setPhase(phase) {
-  if (UI.badgeEl) UI.badgeEl.innerText = String(phase || "").toUpperCase();
+  const p = String(phase || "").toUpperCase();
+
+  // 1) Text
+  if (UI.badgeEl) UI.badgeEl.innerText = p;
+
+  // 2) Badge pop (retrigger-safe)
+  badgePop();
+
+  // 3) HUD flash / shock at milestones
+  const shock = /(PHASE\s*II|PHASE\s*III|PHASE\s*IV|PROTOCOL\s*COMPLETE|VAULT\s*OPEN|REJECTED|LOCKOUT)/.test(p);
+  hudFlash(shock, shock ? 900 : 620);
 }
 
 export function clearStream() {
@@ -526,6 +720,7 @@ export function parseVault(vaultText) {
     }
   }
 
+  // debug hook (optional)
   window.__VOID_HINT_MAP = MAP;
   VAULT_READY = true;
 }
@@ -586,6 +781,7 @@ export function unlockHintByKey(keyOrFragment) {
   let v = String(keyOrFragment || "").trim();
   if (!v) return;
 
+  // allow "0x123::SOMETHING" dev injection
   const kv = v.match(/^(0x[0-9a-f]+)\s*::\s*(.+)$/i);
   if (kv) {
     const key = kv[1].toUpperCase();
@@ -594,11 +790,13 @@ export function unlockHintByKey(keyOrFragment) {
     return;
   }
 
+  // encrypted fragment pasted directly
   if (isEncryptedFragment(v)) {
     promptDecryptAndReveal(v);
     return;
   }
 
+  // normalize to 0x...
   const m = v.match(/0x[0-9a-f]+/i);
   if (m) v = m[0];
   v = v.toUpperCase();
@@ -646,7 +844,6 @@ async function promptDecryptAndReveal(fragment) {
     pulseBody("vault-hit-2", 360);
     jitterBody(1000);
   } catch (e) {
-    // show exact reason in console (helps you debug)
     console.warn("[decrypt] failed:", e?.message || e);
     hintCard("🜏 Decrypt failed (wrong key or tampered).", { mode: "SYSTEM", key: "AES" });
     setStatus("decrypt failed");

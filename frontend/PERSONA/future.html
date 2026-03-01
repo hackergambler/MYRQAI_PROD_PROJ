@@ -6,10 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- ✅ Google AdSense -->
-<script async 
+<script async
   src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8668540803235423"
   crossorigin="anonymous">
 </script>
+
+<!-- ✅ Shared cards/bars styling used by the local engine -->
+<link rel="stylesheet" href="./css/persona-cards.css">
 
 <style>
 :root{
@@ -17,20 +20,33 @@
   --dark:#020617;
 }
 
-*{box-sizing:border-box}
+*{ box-sizing:border-box; }
 
 body{
   margin:0;
   font-family:'JetBrains Mono','Courier New',monospace;
   background:radial-gradient(circle at center,#0a1a35 0%,#020617 100%);
   color:var(--cyber-blue);
+
   display:flex;
   justify-content:center;
-  align-items:center;
+  align-items:flex-start;     /* ✅ was center */
   min-height:100vh;
-  overflow:hidden;
+
+  overflow-y:auto;            /* ✅ enable scroll */
+  overflow-x:hidden;
   padding:20px;
 }
+
+/* Optional: page scrollbar styling */
+body::-webkit-scrollbar{ width:10px; }
+body::-webkit-scrollbar-track{ background: rgba(2,6,23,.65); }
+body::-webkit-scrollbar-thumb{
+  background: rgba(56,189,248,.35);
+  border-radius: 999px;
+  border: 2px solid rgba(2,6,23,.65);
+}
+body::-webkit-scrollbar-thumb:hover{ background: rgba(56,189,248,.55); }
 
 /* ===== BLUE MATRIX BACKGROUND ===== */
 #canvas-matrix{
@@ -59,7 +75,21 @@ body{
   position:relative;
   z-index:10;
   backdrop-filter:blur(6px);
+
+  /* ✅ inner scroll so long results don't overflow screen */
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
 }
+
+/* Optional: box scrollbar styling */
+.box::-webkit-scrollbar{ width:10px; }
+.box::-webkit-scrollbar-track{ background: rgba(2,6,23,.55); border-radius:12px; }
+.box::-webkit-scrollbar-thumb{
+  background: rgba(56,189,248,.28);
+  border-radius:999px;
+  border:2px solid rgba(2,6,23,.55);
+}
+.box::-webkit-scrollbar-thumb:hover{ background: rgba(56,189,248,.5); }
 
 /* corner accents */
 .box::before,
@@ -142,45 +172,26 @@ button:hover{
   transform:translateY(-2px);
 }
 
-/* ===== RESULT ===== */
+/* ===== OUTPUT CONTAINER (engine writes into this) ===== */
 .result{
   margin-top:25px;
   font-size:14px;
   line-height:1.6;
-  display:none;
-  animation:fade .4s ease;
+  display:block;
   border-top:1px dashed rgba(56,189,248,.4);
   padding-top:18px;
-}
-
-@keyframes fade{
-  from{opacity:0;transform:translateY(10px)}
-  to{opacity:1;transform:none}
-}
-
-.card{
-  border:1px solid rgba(56,189,248,.25);
-  border-radius:12px;
-  padding:12px;
-  margin-top:12px;
+  min-height: 10px;
   text-align:left;
-  background:rgba(2,6,23,.6);
 }
 
-.bar{
-  height:6px;
-  background:linear-gradient(90deg,#38bdf8,#60d4ff);
-  border-radius:6px;
-  margin-top:6px;
-}
-
-.tag{
-  display:inline-block;
-  padding:4px 10px;
-  border:1px solid rgba(56,189,248,.4);
-  border-radius:999px;
-  margin:4px 4px 0 0;
-  font-size:11px;
+/* optional: status line */
+#personaStatus{
+  margin-top:10px;
+  font-size:12px;
+  opacity:.75;
+  letter-spacing:.4px;
+  min-height: 16px;
+  text-align:left;
 }
 
 /* ===== BACK BUTTON ===== */
@@ -218,6 +229,12 @@ button:hover{
   opacity:.5;
   margin-top:6px;
 }
+
+/* small screens */
+@media (max-width: 520px){
+  body{ padding: 14px; }
+  .box{ padding: 22px; max-height: calc(100vh - 28px); }
+}
 </style>
 </head>
 
@@ -226,61 +243,72 @@ button:hover{
 <canvas id="canvas-matrix"></canvas>
 
 <div class="box">
-
   <div class="logo">🔮</div>
   <h2>FUTURE AI PREDICTOR</h2>
   <div class="sub">Neural timeline modeling • probabilistic destiny engine</div>
 
-  <input id="username" placeholder="Enter username / social ID">
+  <!-- ✅ IMPORTANT: IDs must match the local engine -->
+  <input id="usernameInput" placeholder="Enter username / social ID">
   <button onclick="predict()">RUN FUTURE SCAN</button>
 
-  <div id="result" class="result"></div>
+  <!-- ✅ status + output containers used by the engine -->
+  <div id="personaStatus"></div>
+  <div id="personaOutput" class="result"></div>
+
+  <div id="privacyNote" style="margin-top:10px;opacity:.7;font-size:12px;text-align:left;"></div>
 
   <div style="text-align:center;">
-    <a href="index.html" class="back-btn">[ RETURN_TO_BASE ]</a>
+    <a href="../index.html" class="back-btn">[ RETURN_TO_BASE ]</a>
   </div>
 
   <div class="footer">
-    No Storage • No Tracking • AI Prediction Engine  
+    No Storage • No Tracking • AI Prediction Engine
     <div class="security">Powered by MYRQAI Neural Engine</div>
   </div>
-
 </div>
 
 <script>
 /* ===== BLUE MATRIX BACKGROUND ===== */
-const canvas=document.getElementById('canvas-matrix');
-const ctx=canvas.getContext('2d');
+const canvas = document.getElementById('canvas-matrix');
+const ctx = canvas.getContext('2d');
+
+const chars = "01";
+const fontSize = 16;
+let drops = [];
 
 function resize(){
-  canvas.width=window.innerWidth;
-  canvas.height=window.innerHeight;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  resetDrops();
 }
-window.onresize=resize;
+
+function resetDrops(){
+  const columns = Math.floor(canvas.width / fontSize);
+  drops = Array(columns).fill(1);
+}
+
+window.addEventListener("resize", resize);
 resize();
 
-const chars="01";
-const fontSize=16;
-const columns=Math.floor(canvas.width/fontSize);
-const drops=Array(columns).fill(1);
-
 function draw(){
-  ctx.fillStyle="rgba(2,6,23,.08)";
+  ctx.fillStyle = "rgba(2,6,23,.08)";
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  ctx.fillStyle="#38bdf8";
-  ctx.font=fontSize+"px monospace";
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = fontSize + "px monospace";
 
   drops.forEach((y,i)=>{
-    const text=chars[Math.floor(Math.random()*chars.length)];
+    const text = chars[Math.floor(Math.random()*chars.length)];
     ctx.fillText(text,i*fontSize,y*fontSize);
-    if(y*fontSize>canvas.height && Math.random()>0.975) drops[i]=0;
+    if(y*fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
     drops[i]++;
   });
 }
 setInterval(draw,35);
 </script>
 
-<script src="future.js"></script>
+<!-- ✅ IMPORTANT: module script -->
+<script type="module" src="./future.js"></script>
+
 </body>
 </html>

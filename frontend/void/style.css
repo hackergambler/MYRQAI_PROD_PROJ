@@ -6,8 +6,9 @@
    ✅ MENU open state, shake class, modal layering
    ✅ Fix: ACTIVE FRAGMENT + SYNCHRONICITY overlap / fragments not visible
    ✅ Fix: left column frames not getting “cut off” / clipped
-   ✅ Overlays never steal clicks
+   ✅ Overlays never steal clicks (except completion overlay when active)
    ✅ No class name changes required
+   ✅ NEW: supports HUD FX layer (#hudFx) + body fallback (works with your vault-engine.js + void.html)
    ========================================================= */
 
 /* =========================
@@ -165,6 +166,62 @@ body::after{
   50%  { transform: translate3d(0,  6px, 0); opacity: .68; }
   100% { transform: translate3d(0, -6px, 0); opacity: .50; }
 }
+
+/* =========================================================
+   ✅ HUD FX LAYER (works with new void.html)
+   - vault-engine.js toggles classes on body OR on #hudFx depending on your version
+   - this supports BOTH (no matter which file is live)
+   ========================================================= */
+#hudFx{
+  position: fixed;
+  inset: 0;
+  z-index: 900;       /* above scanlines/matrix, below UI */
+  pointer-events:none;
+  transform: translateZ(0);
+  will-change: filter, transform, opacity;
+}
+
+/* Flash/shock as filter animation (if engine uses #hudFx classes) */
+@keyframes hudFlashFX {
+  0% { filter: none; opacity: 1; }
+  35% { filter: saturate(1.35) contrast(1.18) brightness(1.10); opacity: 1; }
+  100% { filter: none; opacity: 1; }
+}
+#hudFx.hud-flash{ animation: hudFlashFX .55s ease-out 1; }
+
+@keyframes hudShockFX{
+  0% { filter: none; opacity: 1; }
+  25% { filter: saturate(1.55) contrast(1.25) brightness(1.14); opacity: 1; }
+  60% { filter: saturate(1.25) contrast(1.12); opacity: 1; }
+  100% { filter: none; opacity: 1; }
+}
+#hudFx.hud-shock{ animation: hudShockFX .85s ease-out 1; }
+
+/* vault-hit pulses as filter animation (if engine uses #hudFx classes) */
+@keyframes vaultHitFX{
+  0% { filter: none; }
+  40% { filter: saturate(1.25) contrast(1.15) brightness(1.08); }
+  100% { filter: none; }
+}
+#hudFx.vault-hit{ animation: vaultHitFX .22s ease-out 1; }
+
+@keyframes vaultHit2FX{
+  0% { filter: none; }
+  35% { filter: saturate(1.35) contrast(1.2) brightness(1.1); }
+  70% { filter: saturate(1.15) contrast(1.08); }
+  100% { filter: none; }
+}
+#hudFx.vault-hit-2{ animation: vaultHit2FX .32s ease-out 1; }
+
+/* Jitter family (if engine uses #hudFx classes) */
+@keyframes jitterFX {
+  0%{transform:translate(0)}
+  25%{transform:translate(2px,-2px)}
+  50%{transform:translate(-2px,2px)}
+  75%{transform:translate(1px,-1px)}
+  100%{transform:translate(0)}
+}
+#hudFx[class*="signal-jitter-"]{ animation:jitterFX .12s linear 10; }
 
 /* =========================================================
    TOP BAR
@@ -928,30 +985,32 @@ body::after{
 }
 .shake{ animation: shakeKey .42s ease-out 1; }
 
-/* Jitter (finite) */
-@keyframes jitter {
+/* =========================================================
+   ✅ BODY FALLBACK ANIMS (if your engine still toggles BODY classes)
+   ========================================================= */
+@keyframes jitterBody {
   0%{transform:translate(0)}
   25%{transform:translate(2px,-2px)}
   50%{transform:translate(-2px,2px)}
   75%{transform:translate(1px,-1px)}
   100%{transform:translate(0)}
 }
-body[class*="signal-jitter-"]{ animation:jitter .12s linear 10; }
+body[class*="signal-jitter-"]{ animation:jitterBody .12s linear 10; }
 
-/* Vault hit pulse */
-body.vault-hit { animation: vaultHit .22s ease-out 1; }
-@keyframes vaultHit {
+@keyframes vaultHitBody {
   0% { filter: none; }
   40% { filter: saturate(1.25) contrast(1.15) brightness(1.08); }
   100% { filter: none; }
 }
-body.vault-hit-2 { animation: vaultHit2 .32s ease-out 1; }
-@keyframes vaultHit2 {
-  0% { filter: none; transform: translateZ(0); }
+body.vault-hit { animation: vaultHitBody .22s ease-out 1; }
+
+@keyframes vaultHit2Body {
+  0% { filter: none; }
   35% { filter: saturate(1.35) contrast(1.2) brightness(1.1); }
   70% { filter: saturate(1.15) contrast(1.08); }
   100% { filter: none; }
 }
+body.vault-hit-2 { animation: vaultHit2Body .32s ease-out 1; }
 
 /* Return to base button */
 .back-btn{
@@ -992,6 +1051,7 @@ body.vault-hit-2 { animation: vaultHit2 .32s ease-out 1; }
   .pulse{ animation:none !important; }
   .title.radiant::after{ animation:none !important; }
   body::before{ transition:none !important; }
+  #hudFx{ animation: none !important; }
 }
 
 /* Responsive */
@@ -1014,30 +1074,25 @@ body::before,
 body::after,
 #matrix,
 .vignette,
-.scanlines{ pointer-events: none !important; }
+.scanlines,
+#hudFx{ pointer-events: none !important; }
 
 button, input, textarea{ pointer-events: auto; }
 
 /* =========================================================
    ✅ RECOVERED LOGS FIX (ONLY)
-   - keeps REFRESH / CLEAR visible
-   - does NOT change sidebar layout
    ========================================================= */
-
 #vaultLogCard{
   display:flex;
   flex-direction:column;
   max-height: 360px;
 }
-
 #vaultLogList{
   flex: 1 1 auto;
   min-height: 120px;
   max-height: 230px;
   overflow: auto;
 }
-
-/* Pin action buttons inside card, without overlapping other cards */
 #vaultLogCard .vaultlog-actions{
   flex: 0 0 auto;
   position: sticky;
@@ -1055,4 +1110,147 @@ button, input, textarea{ pointer-events: auto; }
   );
   border-top: 1px solid rgba(0,255,156,.10);
   backdrop-filter: blur(10px);
+}
+
+/* =========================================================
+   ✅ PHASE + HUD FX (BODY-based overlay flash)
+   (kept for compatibility if engine uses body.hud-flash/hud-shock)
+   ========================================================= */
+.rank-pop{
+  animation: rankPop .36s ease-out 1;
+  will-change: transform, filter;
+}
+@keyframes rankPop{
+  0%   { transform: translate3d(0,0,0) scale(1);   filter:none; }
+  40%  { transform: translate3d(0,-1px,0) scale(1.22); filter: saturate(1.2) brightness(1.06); }
+  100% { transform: translate3d(0,0,0) scale(1);   filter:none; }
+}
+
+/* body flash overlay (doesn't steal clicks) */
+body.hud-flash::before,
+body.hud-shock::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0;
+  background:
+    radial-gradient(800px 420px at 30% 30%, rgba(0,255,156,.16), transparent 62%),
+    radial-gradient(720px 420px at 72% 65%, rgba(0,255,204,.12), transparent 62%),
+    linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.22));
+  mix-blend-mode: screen;
+}
+
+body.hud-flash::before{ animation: hudFlash .62s ease-out 1; }
+@keyframes hudFlash{
+  0%   { opacity: 0; transform: translate3d(0,0,0); }
+  25%  { opacity: .95; }
+  100% { opacity: 0; }
+}
+
+body.hud-shock::before{
+  background:
+    radial-gradient(900px 520px at 30% 30%, rgba(0,255,156,.22), transparent 62%),
+    radial-gradient(820px 520px at 72% 65%, rgba(0,255,204,.18), transparent 62%),
+    linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.30));
+  animation: hudShock .9s ease-out 1;
+}
+@keyframes hudShock{
+  0%   { opacity: 0; transform: translate3d(0,0,0); filter: none; }
+  20%  { opacity: 1; filter: saturate(1.25) contrast(1.1) brightness(1.05); }
+  55%  { opacity: .55; }
+  100% { opacity: 0; filter: none; }
+}
+
+/* =========================================================
+   ✅ COMPLETION OVERLAY (ACCESS GRANTED)
+   - appears when #completionOverlay gets .show
+   ========================================================= */
+#completionOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 99999; /* above modals */
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .35s ease;
+  background:
+    radial-gradient(900px 520px at 50% 40%, rgba(0,255,156,.10), transparent 60%),
+    radial-gradient(800px 520px at 65% 60%, rgba(0,255,204,.08), transparent 64%),
+    linear-gradient(180deg, rgba(0,0,0,.72), rgba(0,0,0,.88));
+  backdrop-filter: blur(6px);
+}
+
+#completionOverlay.show{
+  opacity: 1;
+  pointer-events: auto;
+  animation: completionFade .55s ease-out 1;
+}
+@keyframes completionFade{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
+}
+
+#completionOverlay::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,.045) 0px,
+    rgba(255,255,255,.045) 1px,
+    rgba(0,0,0,0) 3px,
+    rgba(0,0,0,0) 7px
+  );
+  opacity: .22;
+  mix-blend-mode: overlay;
+  animation: completionScan 3.2s ease-in-out infinite;
+}
+@keyframes completionScan{
+  0%{ transform: translate3d(0,-10px,0); opacity: .16; }
+  50%{ transform: translate3d(0, 10px,0); opacity: .30; }
+  100%{ transform: translate3d(0,-10px,0); opacity: .16; }
+}
+
+#completionOverlay .completion-box{
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 26px 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(0,255,156,.22);
+  background: rgba(0,0,0,.45);
+  box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 60px rgba(0,255,156,.10);
+  backdrop-filter: blur(14px);
+  min-width: min(560px, 92vw);
+  animation: completionPulse 1.55s ease-in-out infinite;
+  cursor: pointer;
+}
+
+#completionOverlay .completion-box h1{
+  margin: 0;
+  letter-spacing: .22em;
+  font-weight: 900;
+  font-size: clamp(28px, 4vw, 54px);
+  color: rgba(225,255,245,.96);
+  text-shadow:
+    0 0 18px rgba(0,255,156,.25),
+    0 0 48px rgba(0,255,156,.12);
+}
+
+#completionOverlay .completion-box p{
+  margin: 14px 0 0 0;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: rgba(225,255,245,.70);
+}
+
+@keyframes completionPulse{
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(0,-2px,0) scale(1.03); }
+  100% { transform: translate3d(0,0,0) scale(1); }
 }

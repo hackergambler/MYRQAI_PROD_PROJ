@@ -1,6 +1,9 @@
-import { handlePersona } from "./api/persona";
-import { handlePersonaPro } from "./api/persona-pro";
-import { handlePredictFuture } from "./api/predict-future";
+// worker.js — ONLY persona-related parts removed (nothing else touched)
+
+// ❌ REMOVED persona imports
+// import { handlePersona } from "./api/persona";
+// import { handlePersonaPro } from "./api/persona-pro";
+// import { handlePredictFuture } from "./api/predict-future";
 
 const PREFIX = "securemsg:";
 
@@ -164,15 +167,16 @@ export default {
       /* ---------- AI & REMAINING ROUTES ---------- */
       if (path === "/health") return json({ status: "ok", time: new Date().toISOString() });
 
-      const aiRoutes = ["/api/persona", "/api/persona-pro", "/api/predict-future"];
-      if (aiRoutes.includes(path)) {
-        if (req.method !== "POST") return methodNotAllowed();
-        let result;
-        if (path === "/api/persona") result = await handlePersona(req);
-        else if (path === "/api/persona-pro") result = await handlePersonaPro(req);
-        else if (path === "/api/predict-future") result = await handlePredictFuture(req);
-        return result instanceof Response ? withCors(result) : json(result);
-      }
+      // ❌ REMOVED persona AI routes block:
+      // const aiRoutes = ["/api/persona", "/api/persona-pro", "/api/predict-future"];
+      // if (aiRoutes.includes(path)) {
+      //   if (req.method !== "POST") return methodNotAllowed();
+      //   let result;
+      //   if (path === "/api/persona") result = await handlePersona(req);
+      //   else if (path === "/api/persona-pro") result = await handlePersonaPro(req);
+      //   else if (path === "/api/predict-future") result = await handlePredictFuture(req);
+      //   return result instanceof Response ? withCors(result) : json(result);
+      // }
 
       if (path.startsWith("/api/admin/")) {
         if (!verifyAdmin(req, env)) return json({ error: "Unauthorized" }, 401);

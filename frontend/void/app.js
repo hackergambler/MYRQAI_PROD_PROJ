@@ -1,9 +1,9 @@
-// app.js (FIXED) — stronger FX + reliable class retrigger + better debug + safe guards
-// ✅ Adds pulse()/jitter() that FORCE reflow so animations retrigger even when class already present
-// ✅ Adds success/fail FX in solveActive() so you ALWAYS see something
-// ✅ Adds synth success/fail FX + better terminal hints
-// ✅ Adds tiny debug prints (helps confirm caching / engine loaded)
-// ✅ Keeps your original logic + UI wiring unchanged
+// app.js (REVIEWED + FIXED) — SEQUENTIAL FRAGMENTS (NOT RANDOM) + STRONG FX + SAFE GUARDS
+// ✅ CHANGED: Completion FX now uses your ENGINE-COMPATIBLE #completionOverlay (no duplicate overlay injected)
+// ✅ FIX: Onboarding modal body no longer nests ".modal-text" inside ".modal-text"
+// ✅ ADD: ESC + click-to-dismiss completion overlay (and safe close helper)
+// ✅ Keeps your existing UI wiring + modal + logs + FX
+// ✅ Uses clearance gates (isSignalUnlocked) + global progress (localStorage via vault-engine)
 
 import {
   initVoidUI,
@@ -30,7 +30,7 @@ import {
 const PUZZLES_URL = window.__PUZZLES_URL__ || "./puzzles.master.json";
 const BASE_VAULT_IMG = "./assets/void.png";
 
-// session keys (still used for “no repeats within session”)
+// session keys
 const S_SEEN = "myrq_seen_signals";
 const S_SOLVED = "myrq_solved_signals";
 
@@ -52,16 +52,16 @@ let COMPLETION_FIRED = false;
    ======================= */
 const HELP_TERMINAL_TEXT =
   "⟡ HELP // GHOST SIGNAL\n\n" +
-  "Core Loop:\n" +
-  "1) Press SCAN → system selects one random fragment.\n" +
+  "Core Loop (SEQUENTIAL):\n" +
+  "1) Press SCAN → system selects the next available fragment IN ORDER.\n" +
   "2) Click the fragment → the vault is synthesized in RAM.\n" +
   "3) Solve → if correct, it reveals a hidden terminal fragment.\n" +
-  "4) Then it auto-selects the next unsolved fragment.\n\n" +
+  "4) Then it auto-selects the NEXT unsolved fragment (in order).\n\n" +
   "UNLOCK (why this button exists):\n" +
   "• UNLOCK is a decoder tool.\n" +
-  "• It works after a Signal Card is clicked (because the vault must be loaded).\n" +
-  "• You can type a key like 0x163 to reveal its fragment.\n" +
-  "• Or paste an encrypted fragment like enc:v1:... to decrypt (you’ll be asked a passphrase).\n\n" +
+  "• It works after a Signal Card is clicked (vault must be loaded).\n" +
+  "• Type a key like 0x163 to reveal its fragment.\n" +
+  "• Or paste enc:v1:... to decrypt (you’ll be asked a passphrase).\n\n" +
   "Progress:\n" +
   "• Progress is stored locally (your browser), not on the server.\n" +
   "• Rank + Phase Gates unlock more signals as fragments rise.\n";
@@ -75,7 +75,7 @@ function userManualHTML() {
     <hr style="border:0;border-top:1px solid rgba(0,255,156,.14);margin:12px 0" />
 
     <p><b>SCAN</b><br/>
-    Picks <b>one random Signal Fragment</b> for this session (from what your clearance allows).</p>
+    Picks the <b>next Signal Fragment in order</b> (based on your clearance gate).</p>
 
     <p><b>Click the Fragment</b><br/>
     Clicking a fragment <b>synthesizes the vault in RAM</b> (not uploaded). This is what makes UNLOCK work.</p>
@@ -115,7 +115,7 @@ function setOnboardingBody(html) {
   if (!els.onboarding) return;
   const body = els.onboarding.querySelector(".modal-text");
   if (!body) return;
-  body.innerHTML = html;
+  body.innerHTML = html; // ✅ body is already ".modal-text" in HTML — do NOT nest another ".modal-text"
 }
 
 function closeOnboarding() {
@@ -129,11 +129,9 @@ function openUserManual() {
   onboardingTimer = null;
 
   setOnboardingBody(`
-    <div class="modal-text">
-      <p><b>HOW IT WORKS</b></p>
-      ${userManualHTML()}
-      <p class="muted tiny" style="margin-top:10px">Auto-closes in <span id="obTimer">25</span>s.</p>
-    </div>
+    <p><b>HOW IT WORKS</b></p>
+    ${userManualHTML()}
+    <p class="muted tiny" style="margin-top:10px">Auto-closes in <span id="obTimer">25</span>s.</p>
   `);
 
   setOnboardingOpen(true);
@@ -429,7 +427,7 @@ async function verifyAnswer(sig, answerRaw) {
 }
 
 /* =======================
-   Random single fragment selection (CLEARANCE + UNSOLVED)
+   SELECTION (SEQUENTIAL, CLEARANCE + UNSOLVED)
    ======================= */
 function isGloballySolved(sigId) {
   const p = getProgress?.();
@@ -437,22 +435,22 @@ function isGloballySolved(sigId) {
   return Boolean(solved[String(sigId || "").toUpperCase()]);
 }
 
-function pickRandomUnsolved() {
-  const sessionSolved = getSessionSolved();
+/**
+ * Picks the NEXT unsolved signal IN ORDER (by __index), respecting clearance gates.
+ * If gates block higher indices, it will stop at the first locked section.
+ */
+function pickNextUnsolvedInOrder() {
+  if (!Array.isArray(PUZZLES) || PUZZLES.length === 0) return null;
 
-  const pool = PUZZLES.filter((p) => {
-    if (!p?.signal_id) return false;
-    if (isGloballySolved(p.signal_id)) return false;
-    if (sessionSolved.has(p.signal_id)) return false;
+  for (const p of PUZZLES) {
+    if (!p?.signal_id) continue;
+    if (isGloballySolved(p.signal_id)) continue;
 
     const idx = Number(p.__index) || 1;
-    if (!isSignalUnlocked?.(idx)) return false;
-
-    return true;
-  });
-
-  if (pool.length === 0) return null;
-  return pool[Math.floor(Math.random() * pool.length)];
+    if (!isSignalUnlocked?.(idx)) return null; // stop: clearance gate blocks further
+    return p; // first available in order
+  }
+  return null;
 }
 
 function renderSingleSignal(sig) {
@@ -496,7 +494,7 @@ function renderSingleSignal(sig) {
 }
 
 /* =======================
-   Option A: Recovered Logs UI
+   Logs UI
    ======================= */
 function safeDate(ts) {
   if (!ts) return "";
@@ -658,229 +656,68 @@ function wireVaultLogUI() {
 }
 
 /* =======================
-   Completion FX (overlay + pulses)
+   Completion FX (ENGINE overlay)
    ======================= */
-function injectCompletionStylesOnce() {
-  if (document.getElementById("completionFxStyles")) return;
+function closeCompletionOverlay() {
+  const ov = document.getElementById("completionOverlay");
+  if (!ov) return;
+  ov.classList.remove("show");
+  ov.setAttribute("aria-hidden", "true");
+}
 
-  const st = document.createElement("style");
-  st.id = "completionFxStyles";
-  st.textContent = `
-  .completion-overlay{
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: grid;
-    place-items: center;
-    padding: 20px;
-    background:
-      radial-gradient(900px 520px at 50% 40%, rgba(0,255,156,.18), rgba(0,0,0,.86) 62%),
-      linear-gradient(180deg, rgba(0,0,0,.60), rgba(0,0,0,.92));
-    backdrop-filter: blur(10px);
-    animation: compIn 420ms ease-out both;
-  }
-  @keyframes compIn{
-    from{ opacity:0; transform: scale(.98); }
-    to{ opacity:1; transform: scale(1); }
-  }
-  .completion-card{
-    width: min(860px, 94vw);
-    border-radius: 24px;
-    border: 1px solid rgba(0,255,156,.24);
-    background: rgba(0,0,0,.45);
-    box-shadow: 0 30px 80px rgba(0,0,0,.65);
-    padding: 18px;
-    position: relative;
-    overflow: hidden;
-  }
-  .completion-card::before{
-    content:"";
-    position:absolute;
-    inset:-20%;
-    background:
-      radial-gradient(40% 30% at 30% 30%, rgba(0,255,156,.28), transparent 60%),
-      radial-gradient(40% 30% at 70% 60%, rgba(170,80,255,.18), transparent 62%),
-      radial-gradient(35% 28% at 60% 25%, rgba(0,120,255,.14), transparent 62%);
-    filter: blur(18px);
-    opacity:.75;
-    animation: compDrift 7.5s ease-in-out infinite;
-  }
-  @keyframes compDrift{
-    0%{ transform: translate3d(-1.2%, -0.8%, 0) scale(1.02); }
-    50%{ transform: translate3d( 1.0%,  0.6%, 0) scale(1.03); }
-    100%{ transform: translate3d(-1.2%, -0.8%, 0) scale(1.02); }
-  }
-  .completion-inner{
-    position: relative;
-    z-index: 2;
-    display:flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .completion-title{
-    margin: 0;
-    font-size: 18px;
-    letter-spacing: .22em;
-    text-transform: uppercase;
-    color: rgba(225,255,245,.96);
-  }
-  .completion-sub{
-    margin: 0;
-    font-size: 12px;
-    letter-spacing: .10em;
-    color: rgba(225,255,245,.70);
-    line-height: 1.7;
-    white-space: pre-wrap;
-  }
-  .completion-code{
-    margin-top: 6px;
-    font-size: 14px;
-    letter-spacing: .18em;
-    font-weight: 900;
-    color: rgba(0,255,156,.92);
-    padding: 12px 12px;
-    border-radius: 16px;
-    border: 1px solid rgba(0,255,156,.22);
-    background: rgba(0,0,0,.35);
-    display:flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .completion-actions{
-    display:flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content:flex-end;
-    margin-top: 6px;
-  }
-  .completion-btn{
-    border-radius: 16px;
-    border: 1px solid rgba(0,255,156,.22);
-    background: rgba(0,0,0,.24);
-    color: rgba(225,255,245,.92);
-    padding: 12px 14px;
-    letter-spacing: .12em;
-    font-weight: 900;
-    cursor: pointer;
-    text-transform: uppercase;
-  }
-  .completion-btn.primary{
-    background: linear-gradient(180deg, rgba(0,255,156,.18), rgba(0,0,0,.18));
-    border-color: rgba(0,255,156,.35);
-  }
-  .completion-btn:hover{ transform: translateY(-1px); }
-  `;
-  document.head.appendChild(st);
+function openCompletionOverlay(textLines) {
+  const ov = document.getElementById("completionOverlay");
+  if (!ov) return false;
+
+  const box = ov.querySelector(".completion-box") || ov;
+  const pEl = box.querySelector("p");
+  if (pEl && textLines) pEl.textContent = String(textLines);
+
+  ov.classList.add("show");
+  ov.setAttribute("aria-hidden", "false");
+  return true;
 }
 
 async function showCompletionFX() {
   if (COMPLETION_FIRED) return;
   COMPLETION_FIRED = true;
 
-  injectCompletionStylesOnce();
-
   const p = getProgress?.() || {};
   const rank = p.rank || "PROTOCOL COMPLETE";
-  const code = "PROOF: " + (p.fragments >= 100 ? "VAULT_OPEN" : "UNKNOWN");
+  const fragments = Number(p.fragments || 0);
 
-  const overlay = document.createElement("div");
-  overlay.className = "completion-overlay";
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
-
-  const card = document.createElement("div");
-  card.className = "completion-card";
-
-  const inner = document.createElement("div");
-  inner.className = "completion-inner";
-
-  const title = document.createElement("h2");
-  title.className = "completion-title";
-  title.textContent = "VAULT OPEN • PROTOCOL COMPLETE";
-
-  const sub = document.createElement("p");
-  sub.className = "completion-sub";
-  sub.textContent =
-    "All fragments recovered.\n" +
+  const msg =
+    "VOID VAULT COMPROMISED\n" +
     `RANK: ${rank}\n` +
-    "Screenshot this screen as proof.";
+    `FRAGMENTS: ${fragments}/100\n` +
+    "PROOF: ACCESS GRANTED";
 
-  const codeRow = document.createElement("div");
-  codeRow.className = "completion-code";
+  // Prefer engine-compatible overlay (your void.html)
+  const usedEngineOverlay = openCompletionOverlay(msg);
 
-  const left = document.createElement("div");
-  left.textContent = "CLEARANCE CARD";
-
-  const right = document.createElement("div");
-  right.style.display = "flex";
-  right.style.gap = "10px";
-  right.style.alignItems = "center";
-  right.style.flexWrap = "wrap";
-
-  const codeEl = document.createElement("span");
-  codeEl.textContent = code;
-
-  const copyBtn = document.createElement("button");
-  copyBtn.className = "completion-btn";
-  copyBtn.type = "button";
-  copyBtn.textContent = "COPY";
-  copyBtn.addEventListener("click", async () => {
-    const t = `${title.textContent}\nRANK: ${rank}\n${code}`;
-    try {
-      await navigator.clipboard.writeText(t);
-      setStatus("completion copied");
-      Sound.tick("sys");
-    } catch {
-      prompt("Copy:", t);
-    }
-  });
-
-  right.appendChild(codeEl);
-  right.appendChild(copyBtn);
-
-  codeRow.appendChild(left);
-  codeRow.appendChild(right);
-
-  const actions = document.createElement("div");
-  actions.className = "completion-actions";
-
-  const close = document.createElement("button");
-  close.className = "completion-btn primary";
-  close.type = "button";
-  close.textContent = "RETURN TO TERMINAL";
-  close.addEventListener("click", () => overlay.remove());
-
-  const reset = document.createElement("button");
-  reset.className = "completion-btn";
-  reset.type = "button";
-  reset.textContent = "RESET PROGRESS";
-  reset.addEventListener("click", () => {
-    overlay.remove();
-    els.clearProgress?.click?.();
-  });
-
-  actions.appendChild(reset);
-  actions.appendChild(close);
-
-  inner.appendChild(title);
-  inner.appendChild(sub);
-  inner.appendChild(codeRow);
-  inner.appendChild(actions);
-
-  card.appendChild(inner);
-  overlay.appendChild(card);
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
-
-  document.body.appendChild(overlay);
+  // Fallback: terminal proof (in case overlay missing)
+  revealDirectHint(
+    "⟡ PROTOCOL COMPLETE\n" +
+      `⟡ RANK: ${rank}\n` +
+      `⟡ FRAGMENTS: ${fragments}/100\n` +
+      "⟡ PROOF: ACCESS GRANTED",
+    { mode: "SYSTEM", key: "COMPLETE", rare: true }
+  );
 
   Sound.tick("rare");
   pulse("vault-hit-2", 360);
   jitter(9, 900);
+  jumpToNewest?.();
+
+  if (usedEngineOverlay) {
+    // Click-to-dismiss (engine box already has cursor pointer)
+    const ov = document.getElementById("completionOverlay");
+    ov?.addEventListener(
+      "click",
+      () => closeCompletionOverlay(),
+      { once: true }
+    );
+  }
 }
 
 function maybeTriggerCompletionFX() {
@@ -889,7 +726,7 @@ function maybeTriggerCompletionFX() {
 }
 
 /* =======================
-   Scan
+   Scan (LOAD + CHOOSE NEXT IN ORDER)
    ======================= */
 async function scanForSignals() {
   if (scanning) return;
@@ -914,7 +751,6 @@ async function scanForSignals() {
     }
 
     parsed.sort((a, b) => parseHexIdToInt(a.signal_id) - parseHexIdToInt(b.signal_id));
-
     parsed.forEach((p, i) => (p.__index = i + 1));
     PUZZLES = parsed;
 
@@ -926,23 +762,27 @@ async function scanForSignals() {
     pulse("vault-hit", 220);
     jitter(1, 420);
 
-    const chosen = pickRandomUnsolved();
+    const chosen = pickNextUnsolvedInOrder();
     if (chosen) {
       markSessionSeen(chosen.signal_id);
       renderSingleSignal(chosen);
 
       const prog = getProgress?.() || {};
       revealDirectHint(
-        "⟡ SCAN COMPLETE.\nOne fragment has been selected.\n" +
+        "⟡ SCAN COMPLETE.\nNext fragment selected (SEQUENTIAL).\n" +
           `⟡ Rank: ${prog.rank || "UNKNOWN"}\n` +
-          `⟡ Fragments: ${prog.fragments || 0}/100`,
+          `⟡ Fragments: ${prog.fragments || 0}/100\n` +
+          `⟡ Next: ${chosen.signal_id}`,
         { mode: "SYSTEM", key: "SCAN", rare: true }
       );
       jumpToNewest?.();
     } else {
       renderSingleSignal(null);
+
+      const prog = getProgress?.() || {};
       revealDirectHint(
-        "⟡ NO AVAILABLE FRAGMENTS.\nEither all are solved, or clearance gates are locked.\nSolve more to raise rank.",
+        "⟡ NO AVAILABLE FRAGMENTS.\nEither all are solved, or clearance gates are locked.\n" +
+          `⟡ Rank: ${prog.rank || "UNKNOWN"} • Fragments: ${prog.fragments || 0}/100`,
         { mode: "SYSTEM", key: "SCAN" }
       );
       jumpToNewest?.();
@@ -989,7 +829,6 @@ async function openSignal(sig) {
       setStatus("signal stabilized");
       Sound.tick("ok");
 
-      // Strong visual confirmation
       pulse("vault-hit-2", 300);
       jitter(sig.difficulty || 1, 760);
 
@@ -1123,7 +962,7 @@ Scan again to continue.`,
   jitter(6, 900);
 
   setMeter();
-  showSignalsHelper("Session terminated. Press SCAN to pull a new fragment.");
+  showSignalsHelper("Session terminated. Press SCAN to pull the next fragment.");
 }
 
 /* =======================
@@ -1174,7 +1013,6 @@ async function solveActive() {
       showModalMessage(ui.text, ui.type);
       modalShake(ui.shake || 520);
 
-      // FORCE visible feedback even if engine CSS is minimal
       pulse("vault-hit", 220);
       jitter(active.difficulty || 1, 720);
 
@@ -1196,7 +1034,6 @@ async function solveActive() {
 
     showModalMessage("ACCEPTED • VERIFIED", "ok");
 
-    // BIG success FX
     Sound.tick("rare");
     pulse("vault-hit-2", 360);
     jitter(9, 950);
@@ -1215,19 +1052,14 @@ async function solveActive() {
       console.warn("[onSolveSuccess] failed", e);
     }
 
-    // Cosmetic URL flag (optional)
     markSolvedUrl(active.signal_id);
-
-    // Session tracking
     markSessionSolved(active.signal_id);
 
-    // Update UI progress + logs
     setMeter();
     renderVaultLog();
 
     setStatus("unlocked");
 
-    // Reveal fragment in terminal using existing pipeline
     try {
       unlockHintByKey(active.signal_id);
     } catch (e) {
@@ -1251,14 +1083,15 @@ async function solveActive() {
     scheduleClosePuzzle(520);
     jumpToNewest?.();
 
-    // ✅ Completion FX
+    // ✅ Completion FX (engine overlay)
     maybeTriggerCompletionFX();
 
-    const next = pickRandomUnsolved();
+    // ✅ NEXT (SEQUENTIAL)
+    const next = pickNextUnsolvedInOrder();
     if (next) {
       markSessionSeen(next.signal_id);
       renderSingleSignal(next);
-      revealDirectHint("⟡ NEXT FRAGMENT SELECTED.\nContinue the hunt.", { mode: "SYSTEM", key: "NEXT", rare: true });
+      revealDirectHint(`⟡ NEXT FRAGMENT SELECTED.\n${next.signal_id} • Continue the hunt.`, { mode: "SYSTEM", key: "NEXT", rare: true });
       jumpToNewest?.();
     } else {
       renderSingleSignal(null);
@@ -1344,7 +1177,7 @@ function wireUI() {
     { beep: (t) => Sound.tick(t) }
   );
 
-  // debug: confirms engine is callable + progress is readable (also helps cache debugging)
+  // debug: confirms engine is callable + progress is readable
   try {
     const p = getProgress?.() || {};
     console.log("[APP] engine OK • progress:", { fragments: p.fragments, rank: p.rank, solved: p.solvedCount });
@@ -1358,6 +1191,12 @@ function wireUI() {
   setMeter();
   wireVaultLogUI();
   maybeTriggerCompletionFX();
+
+  // Completion overlay: also allow ESC dismissal (handled in global keydown below)
+  const completion = document.getElementById("completionOverlay");
+  if (completion) {
+    completion.setAttribute("aria-hidden", completion.classList.contains("show") ? "false" : "true");
+  }
 
   els.scanBtn?.addEventListener("click", () => scanForSignals());
 
@@ -1444,6 +1283,7 @@ function wireUI() {
       closePuzzle();
       closeOnboarding();
       closeLogModal();
+      closeCompletionOverlay(); // ✅ now closes completion too
     }
   });
 
@@ -1507,11 +1347,12 @@ function wireUI() {
     try { resetProgress?.(); } catch {}
 
     COMPLETION_FIRED = false;
+    closeCompletionOverlay();
 
     setMeter();
     renderVaultLog();
     setStatus("progress reset");
-    revealDirectHint("⟡ PROGRESS RESET.\nLocal vault cleared.\nScan again to get a new random fragment.", {
+    revealDirectHint("⟡ PROGRESS RESET.\nLocal vault cleared.\nScan again to get the next fragment.", {
       mode: "SYSTEM",
       key: "RESET",
       rare: true,
@@ -1522,11 +1363,11 @@ function wireUI() {
     jitter(5, 900);
 
     jumpToNewest?.();
-    showSignalsHelper("Press SCAN to pull a fragment…");
+    showSignalsHelper("Press SCAN to pull the next fragment…");
   });
 
   showSignalsHelper(
-    "Press SCAN to pull a fragment…",
+    "Press SCAN to pull the next fragment…",
     `Expected: <code>${escapeHtml(new URL(PUZZLES_URL, location.href).toString())}</code>`
   );
 }
@@ -1537,7 +1378,7 @@ async function boot() {
 
   const p = getProgress?.() || {};
   revealDirectHint(
-    "⟡ SIGNAL HUNTER ONLINE.\nSCAN picks one random fragment per session.\nSolve to unlock the next.\n\n" +
+    "⟡ SIGNAL HUNTER ONLINE.\nSCAN selects the next fragment in order.\nSolve to unlock the next.\n\n" +
       `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${p.fragments || 0}/100`,
     { mode: "SYSTEM", key: "BOOT", rare: true }
   );
