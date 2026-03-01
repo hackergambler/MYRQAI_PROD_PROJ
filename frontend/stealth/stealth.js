@@ -1,4 +1,4 @@
-import { encryptMessage, decryptMessage } from "./crypto.js";
+import { encryptMessage, decryptMessage } from "../crypto.js";
 
 /* =============================
    ELEMENTS & CONFIG

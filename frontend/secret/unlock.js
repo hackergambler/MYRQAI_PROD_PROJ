@@ -1,5 +1,5 @@
 // unlock.js
-import { decryptMessage } from './crypto.js';
+import { decryptMessage } from '../crypto.js';
 
 const API = "https://myrqai-prod.tibco-tibco-8.workers.dev";
 let isUnlocking = false;

@@ -157,6 +157,34 @@
       color: var(--dark-void);
       box-shadow: 0 0 30px var(--glitch-green);
     }
+    .back-btn {
+      display: inline-block;
+      margin-top: 15px;
+      padding: 15px 30px;
+      font-size: 13px;
+      background: rgba(0, 255, 65, 0.15);
+      color: var(--glitch-green);
+      text-decoration: none;
+      border: 1px solid var(--glitch-green);
+      text-transform: uppercase;
+      font-weight: bold;
+      cursor: pointer !important;
+      transition: 0.3s;
+      border-radius: 4px;
+    }
+
+    .back-btn:hover {
+      background: var(--glitch-green);
+      color: var(--dark-void);
+      box-shadow: 0 0 25px var(--glitch-green);
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 10px;
+      opacity: .5;
+    }
 
     #msg {
       margin-top: 20px;
@@ -192,6 +220,12 @@
   <button onclick="login()">>> AUTHENTICATE</button>
   
   <div id="msg"></div>
+  <div style="text-align:center;">
+    <a href="../index.html" class="back-btn">[ RETURN_TO_BASE ]</a>
+  </div>
+  <div class="footer">
+    © 2026 MYRQAI // PRIVACY_ENFORCED // BUILD_1.04
+  </div>
 </div>
 
 <script>
