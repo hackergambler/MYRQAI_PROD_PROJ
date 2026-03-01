@@ -1,4 +1,4 @@
-<!-- void.html (FULL FIXED) — Option A + Vault Log + WORKING Phase Animations + HUD FX LAYER + Completion Overlay -->
+<!-- void.html (FULL FIXED) — Option A + Vault Log + WORKING Phase/HUD FX + CINEMATIC Completion Overlay -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,7 +11,6 @@
   <!-- void.html is inside /void -->
   <link rel="stylesheet" href="./style.css" />
 
-  <!-- ✅ Option A: Vault Log panel styles + Phase FX + Completion Overlay -->
   <style>
     /* --- VAULT LOG PANEL (Option A) --- */
     .vaultlog { margin-top: 14px; }
@@ -142,8 +141,10 @@
     }
 
     /* =========================
-       ✅ HUD FX LAYER (IMPORTANT)
-       vault-engine.js toggles classes on #hudFx to avoid body conflicts
+       ✅ HUD FX LAYER
+       - app.js toggles classes on <body>
+       - vault-engine may toggle on #hudFx
+       So we support BOTH body.<cls> and #hudFx.<cls>
        ========================= */
     #hudFx{
       position: fixed;
@@ -154,7 +155,7 @@
       will-change: filter, transform, opacity;
     }
 
-    /* 1) Rank/Phase pop on badge */
+    /* 1) Rank/Phase pop on badge (engine may add .rank-pop on badge) */
     @keyframes rankPop {
       0% { transform: translateZ(0) scale(1); filter: none; }
       35% { transform: translateZ(0) scale(1.08); filter: saturate(1.25) brightness(1.08); }
@@ -162,30 +163,45 @@
     }
     .badge.rank-pop { animation: rankPop .42s ease-out 1; }
 
-    /* 2) Global HUD flash (now on #hudFx, not body) */
+    .badge.ghost{
+      border-color: rgba(225,255,245,.18);
+      color: rgba(225,255,245,.78);
+      background: rgba(0,0,0,.18);
+      margin-left: 10px;
+    }
+    .progressline{
+      margin-top: 8px;
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: rgba(225,255,245,.70);
+    }
+    .progressline b{ color: rgba(0,255,156,.92); }
+
+    /* 2) Global HUD flash */
     @keyframes hudFlash {
       0% { filter: none; opacity: 1; }
       35% { filter: saturate(1.35) contrast(1.18) brightness(1.10); opacity: 1; }
       100% { filter: none; opacity: 1; }
     }
-    #hudFx.hud-flash { animation: hudFlash .55s ease-out 1; }
+    #hudFx.hud-flash, body.hud-flash { animation: hudFlash .55s ease-out 1; }
 
-    /* 3) Milestone stronger flash (now on #hudFx, not body) */
+    /* 3) Milestone stronger flash */
     @keyframes hudShock {
       0% { filter: none; opacity: 1; }
       25% { filter: saturate(1.55) contrast(1.25) brightness(1.14); opacity: 1; }
       60% { filter: saturate(1.25) contrast(1.12); opacity: 1; }
       100% { filter: none; opacity: 1; }
     }
-    #hudFx.hud-shock { animation: hudShock .85s ease-out 1; }
+    #hudFx.hud-shock, body.hud-shock { animation: hudShock .85s ease-out 1; }
 
-    /* 4) Vault hit pulses (used by engine) */
+    /* 4) Vault hit pulses */
     @keyframes vaultHit {
       0% { filter: none; }
       40% { filter: saturate(1.25) contrast(1.15) brightness(1.08); }
       100% { filter: none; }
     }
-    #hudFx.vault-hit { animation: vaultHit .22s ease-out 1; }
+    #hudFx.vault-hit, body.vault-hit { animation: vaultHit .22s ease-out 1; }
 
     @keyframes vaultHit2 {
       0% { filter: none; transform: translateZ(0); }
@@ -193,9 +209,9 @@
       70% { filter: saturate(1.15) contrast(1.08); }
       100% { filter: none; }
     }
-    #hudFx.vault-hit-2 { animation: vaultHit2 .32s ease-out 1; }
+    #hudFx.vault-hit-2, body.vault-hit-2 { animation: vaultHit2 .32s ease-out 1; }
 
-    /* 5) Jitter class family (engine adds signal-jitter-N) */
+    /* 5) Jitter class family (signal-jitter-N) */
     @keyframes jitter {
       0%{transform:translate(0)}
       25%{transform:translate(2px,-2px)}
@@ -203,11 +219,14 @@
       75%{transform:translate(1px,-1px)}
       100%{transform:translate(0)}
     }
-    #hudFx[class*="signal-jitter-"]{ animation:jitter .12s linear 10; }
+    #hudFx[class*="signal-jitter-"], body[class*="signal-jitter-"]{ animation:jitter .12s linear 10; }
 
     /* =========================
-       ✅ ENGINE-COMPATIBLE COMPLETION OVERLAY
-       vault-engine.js expects: #completionOverlay + .completion-box + .show
+       ✅ CINEMATIC + ENGINE-COMPATIBLE COMPLETION OVERLAY
+       app.js will:
+       - show #completionOverlay
+       - set text in #completionText if present (else updates <p> in .completion-box)
+       - attempt to play #completionVideo if present
        ========================= */
     #completionOverlay{
       position: fixed;
@@ -222,6 +241,95 @@
     }
     #completionOverlay.show{ display:flex; }
 
+    /* --- cinematic stage --- */
+    .completion-stage{
+      position: relative;
+      width: min(980px, 96vw);
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid rgba(0,255,156,.22);
+      background: rgba(0,0,0,.62);
+      box-shadow: 0 18px 70px rgba(0,0,0,.72);
+      cursor: pointer;
+    }
+    .completion-video{
+      width: 100%;
+      height: auto;
+      display:block;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      filter: contrast(1.05) saturate(1.08);
+    }
+    .completion-stage::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:
+        radial-gradient(45% 40% at 18% 22%, rgba(0,255,156,.16), transparent 60%),
+        radial-gradient(40% 35% at 82% 70%, rgba(0,255,204,.12), transparent 62%),
+        linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.55));
+      mix-blend-mode: screen;
+      opacity: .9;
+    }
+    .completion-stage::after{
+      content:"";
+      position:absolute;
+      inset:-40%;
+      pointer-events:none;
+      background:
+        radial-gradient(45% 35% at 30% 30%, rgba(0,255,156,.22), transparent 60%),
+        radial-gradient(40% 35% at 70% 70%, rgba(0,255,204,.16), transparent 62%),
+        radial-gradient(35% 30% at 70% 25%, rgba(255,45,109,.12), transparent 62%);
+      filter: blur(18px);
+      opacity:.55;
+      animation: compDrift 3.6s ease-in-out infinite;
+    }
+    @keyframes compDrift{
+      0%,100% { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
+      50%     { transform: translate3d( 1.2%,  1%, 0) scale(1.03); }
+    }
+
+    .completion-hud{
+      position:absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 16px 16px 14px 16px;
+      z-index: 2;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .completion-title{
+      margin:0;
+      font-weight: 900;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      font-size: 16px;
+      color: rgba(0,255,156,.92);
+      text-shadow: 0 0 18px rgba(0,255,156,.18);
+    }
+    .completion-proof{
+      margin:0;
+      white-space: pre-wrap;
+      line-height: 1.65;
+      color: rgba(225,255,245,.88);
+      font-size: 13px;
+      letter-spacing: .08em;
+      border: 1px solid rgba(0,255,156,.14);
+      background: rgba(0,0,0,.30);
+      border-radius: 16px;
+      padding: 12px 12px;
+      max-height: 38vh;
+      overflow:auto;
+    }
+    .completion-hint{
+      font-size: 11px;
+      color: rgba(225,255,245,.62);
+      letter-spacing: .10em;
+      text-transform: uppercase;
+    }
+
+    /* --- legacy box (kept for compatibility; hidden when cinematic exists) --- */
     .completion-box{
       width: min(760px, 96vw);
       border-radius: 22px;
@@ -233,24 +341,6 @@
       position: relative;
       overflow: hidden;
     }
-    .completion-box::before{
-      content:"";
-      position:absolute;
-      inset:-40%;
-      background:
-        radial-gradient(45% 35% at 30% 30%, rgba(0,255,156,.22), transparent 60%),
-        radial-gradient(40% 35% at 70% 70%, rgba(0,255,204,.16), transparent 62%),
-        radial-gradient(35% 30% at 70% 25%, rgba(255,45,109,.12), transparent 62%);
-      filter: blur(18px);
-      opacity:.9;
-      animation: compDrift 3.6s ease-in-out infinite;
-      pointer-events:none;
-    }
-    @keyframes compDrift{
-      0%,100% { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
-      50%     { transform: translate3d( 1.2%,  1%, 0) scale(1.03); }
-    }
-
     .completion-box h1{
       margin: 0;
       font-weight: 900;
@@ -281,10 +371,15 @@
       position: relative;
       z-index: 1;
     }
+
+    /* If cinematic stage exists, hide legacy box to avoid duplicates */
+    #completionOverlay .completion-stage ~ .completion-box{ display:none; }
+
     @keyframes vaultReveal {
-      0% { transform: translateY(8px) scale(.98); opacity: 0; }
+      0% { transform: translateY(10px) scale(.985); opacity: 0; }
       100% { transform: translateY(0) scale(1); opacity: 1; }
     }
+    #completionOverlay.show .completion-stage { animation: vaultReveal .42s ease-out 1; }
     #completionOverlay.show .completion-box { animation: vaultReveal .42s ease-out 1; }
   </style>
 </head>
@@ -294,7 +389,7 @@
   <div class="vignette" aria-hidden="true"></div>
   <div class="scanlines" aria-hidden="true"></div>
 
-  <!-- ✅ IMPORTANT: FX target for vault-engine.js -->
+  <!-- ✅ FX target (supported even if app.js uses body classes) -->
   <div id="hudFx" aria-hidden="true"></div>
 
   <header class="topbar">
@@ -325,7 +420,10 @@
     <aside class="side">
       <div class="side-card">
         <div class="side-title">ACTIVE FRAGMENT</div>
-        <div class="side-text">Scan will select <b>one random signal</b>. Solve it to unlock the next.</div>
+        <div class="side-text">
+          Scan selects the <b>next fragment in order</b> (gated by your clearance).
+          Solve it to unlock deeper signals.
+        </div>
 
         <div class="meter">
           <div class="meter-head">
@@ -382,20 +480,24 @@
 
     <section class="panel" role="region" aria-label="Ghost Signal Terminal">
       <div class="panel-head">
-        <div class="badge" id="phaseBadge">SCANNING</div>
+        <div class="badge" id="phaseBadge">PHASE I</div>
+        <div class="badge ghost" id="stateBadge">IDLE</div>
         <h1 class="title radiant glitch" data-text="GHOST SIGNAL">GHOST SIGNAL</h1>
         <p class="subtitle">
           You are a <b>Signal Hunter</b>. Reconstruct the <b>Master Manifest</b> by solving fragments.
         </p>
+        <div class="progressline">
+          RANK <b id="rankLabel">UNKNOWN</b> • PHASE <b id="phaseLabel">PHASE I</b> • FRAGMENTS <b id="fragLabel">0/100</b>
+        </div>
       </div>
 
       <div class="mission" id="mission">
         <div class="mission-title">HOW IT WORKS</div>
         <ol class="mission-steps">
-          <li>Press <b>SCAN</b> → system selects <b>one random fragment</b>.</li>
-          <li>Click the fragment → it synthesizes in RAM.</li>
-          <li>Solve → unlocks a hidden terminal fragment.</li>
-          <li>Then it auto-loads the <b>next random unsolved</b> fragment (this session).</li>
+          <li>Press <b>SCAN</b> → system selects the <b>next available fragment in order</b> (clearance-gated).</li>
+          <li>Click the fragment → it synthesizes in RAM (vault becomes “ready”).</li>
+          <li>Solve → unlocks hidden intel + vault log entry.</li>
+          <li>Then it auto-selects the <b>next unsolved fragment</b> (sequential).</li>
         </ol>
       </div>
 
@@ -447,7 +549,7 @@
       <div class="modal-card">
         <div class="modal-title">The Myrq Protocol</div>
         <div class="modal-text">
-          <p><b>Loop:</b> Scan → One Fragment → Synthesize → Solve → Unlock → Next Random.</p>
+          <p><b>Loop:</b> Scan → Click Fragment → Synthesize → Solve → Unlock → Next (sequential).</p>
           <p><b>Progress:</b> Stored locally in your browser (rank + phase gates).</p>
           <p class="muted tiny">Auto-closes in <span id="obTimer">10</span>s.</p>
         </div>
@@ -474,9 +576,27 @@
       </div>
     </div>
 
-    <!-- ✅ COMPLETION OVERLAY (ENGINE COMPATIBLE) -->
+    <!-- ✅ COMPLETION OVERLAY (ENGINE COMPATIBLE + CINEMATIC) -->
     <div id="completionOverlay" aria-hidden="true">
-      <div class="completion-box" role="dialog" aria-modal="true" aria-label="Vault Complete">
+      <!-- Cinematic layer (app.js will play ./assets/completion.mp4 if present) -->
+      <div class="completion-stage" role="dialog" aria-modal="true" aria-label="Vault Complete">
+        <video
+          id="completionVideo"
+          class="completion-video"
+          preload="auto"
+          muted
+          playsinline
+        ></video>
+
+        <div class="completion-hud">
+          <h1 class="completion-title">ACCESS GRANTED</h1>
+          <pre id="completionText" class="completion-proof">VOID VAULT COMPROMISED</pre>
+          <div class="completion-hint">CLICK TO DISMISS • ESC TO EXIT</div>
+        </div>
+      </div>
+
+      <!-- Legacy box (still supported if you remove the cinematic stage) -->
+      <div class="completion-box" role="dialog" aria-modal="true" aria-label="Vault Complete (Legacy)">
         <h1>ACCESS GRANTED</h1>
         <p>VOID VAULT COMPROMISED</p>
         <div class="hint">CLICK TO DISMISS • ESC TO EXIT</div>

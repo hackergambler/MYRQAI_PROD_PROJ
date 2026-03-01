@@ -1,6 +1,0 @@
-MYRQAI_VAULT_START
-observer::U29tZW9uZSBpcyB3YXRjaGluZyB5b3U=
-silence::U2lsZW5jZSByZXZlYWxzIGhpZGRlbiBwYXR0ZXJucw==
-pattern::VGhlIHRoaXJkIGNsaWNrIGlzIG5vdCBhY2NpZGVudA==
-night::VGhlIGRhcmtuZXNzIGNhcnJpZXMgdHJ1dGg=
-MYRQAI_VAULT_END

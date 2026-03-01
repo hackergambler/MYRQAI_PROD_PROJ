@@ -1,14 +1,14 @@
-// app.js (REVIEWED + FIXED) — SEQUENTIAL FRAGMENTS (NOT RANDOM) + STRONG FX + SAFE GUARDS
-// ✅ CHANGED: Completion FX now uses your ENGINE-COMPATIBLE #completionOverlay (no duplicate overlay injected)
-// ✅ FIX: Onboarding modal body no longer nests ".modal-text" inside ".modal-text"
-// ✅ ADD: ESC + click-to-dismiss completion overlay (and safe close helper)
-// ✅ Keeps your existing UI wiring + modal + logs + FX
-// ✅ Uses clearance gates (isSignalUnlocked) + global progress (localStorage via vault-engine)
+// app.js (FIXED FULL) — SEQUENTIAL FRAGMENTS + RANK/PHASE UI UPDATES + SAFE PAYLOAD HIDING + CINEMATIC COMPLETION
+// ✅ FIX: Rank/Phase/Fragments UI updates AFTER SCAN, AFTER SOLVE, AFTER RESET
+// ✅ FIX: Progress badge (#phaseBadge) stays synced to engine progress phase
+// ✅ FIX: Secret payload hidden by default (shows only if ?dev=1 OR localStorage MYRQAI_DEV=1)
+// ✅ ADD: Cinematic completion overlay support (plays #completionVideo if present; writes #completionText)
+// ✅ Keeps: sequential pick, vault synth, logs UI, completion overlay, FX, modals
 
 import {
   initVoidUI,
   setStatus,
-  setPhase,
+  setPhase as setProgressPhase,
   clearStream,
   synthesizeFromPayload,
   unlockHintByKey,
@@ -37,6 +37,22 @@ const S_SOLVED = "myrq_solved_signals";
 // fail policy
 const LOCKOUT_AFTER = 20;
 
+// DEV flag: hide payload by default
+const DEV_SHOW_PAYLOAD = (() => {
+  try {
+    const url = new URL(location.href);
+    const q = url.searchParams.get("dev");
+    if (q === "1" || q === "true") return true;
+    const ls = localStorage.getItem("MYRQAI_DEV");
+    return ls === "1" || ls === "true";
+  } catch {
+    return false;
+  }
+})();
+
+// Completion cinematic video (optional). Place file at /void/assets/completion.mp4
+const COMPLETION_VIDEO_SRC = "./assets/completion.mp4";
+
 let els = {};
 let PUZZLES = [];
 let active = null;
@@ -46,6 +62,55 @@ let solving = false;
 
 // completion FX guard
 let COMPLETION_FIRED = false;
+
+/* =======================
+   UI helpers
+   ======================= */
+function setState(state) {
+  try {
+    const b = document.getElementById("stateBadge");
+    if (b) b.textContent = String(state || "").toUpperCase();
+  } catch {}
+}
+
+function getTotalFragmentsCount() {
+  // Use puzzles length when available (ex: 10 puzzles => show 0/10 ... 10/10)
+  // Fallback to 100 before scan finishes (keeps your HUD stable on first paint)
+  const n = Array.isArray(PUZZLES) ? PUZZLES.length : 0;
+  return n > 0 ? n : 100;
+}
+
+function getSolvedFragmentsCount() {
+  const p = getProgress?.() || {};
+  const sc = Number(p.solvedCount);
+  if (Number.isFinite(sc)) return sc;
+  const fr = Number(p.fragments);
+  return Number.isFinite(fr) ? fr : 0;
+}
+
+function fragText() {
+  const solved = getSolvedFragmentsCount();
+  const total = getTotalFragmentsCount();
+  return `${Math.min(solved, total)}/${total}`;
+}
+
+function renderProgressHeader() {
+  try {
+    const p = getProgress?.() || {};
+    const rEl = document.getElementById("rankLabel");
+    const fEl = document.getElementById("fragLabel");
+    const phEl = document.getElementById("phaseLabel");
+
+    if (rEl) rEl.textContent = String(p.rank || "UNKNOWN");
+    if (fEl) fEl.textContent = fragText();
+    if (phEl) phEl.textContent = String(p.phase || "PHASE I");
+
+    // keep engine badge synced to PROGRESS PHASE (NOT state)
+    try {
+      setProgressPhase?.(p.phase || "PHASE I");
+    } catch {}
+  } catch {}
+}
 
 /* =======================
    HELP + USER MANUAL
@@ -115,7 +180,7 @@ function setOnboardingBody(html) {
   if (!els.onboarding) return;
   const body = els.onboarding.querySelector(".modal-text");
   if (!body) return;
-  body.innerHTML = html; // ✅ body is already ".modal-text" in HTML — do NOT nest another ".modal-text"
+  body.innerHTML = html;
 }
 
 function closeOnboarding() {
@@ -274,7 +339,6 @@ function markSessionSolved(id) { const s = getSessionSolved(); s.add(id); writeS
 function forceReflow() {
   try { void document.body.offsetHeight; } catch {}
 }
-
 function pulse(cls, ms = 280) {
   try {
     document.body.classList.remove(cls);
@@ -283,7 +347,6 @@ function pulse(cls, ms = 280) {
     setTimeout(() => document.body.classList.remove(cls), ms);
   } catch {}
 }
-
 function clearJitterClasses() {
   try {
     [...document.body.classList].forEach((c) => {
@@ -291,7 +354,6 @@ function clearJitterClasses() {
     });
   } catch {}
 }
-
 function jitter(level = 1, ms = 700) {
   try {
     clearJitterClasses();
@@ -304,8 +366,6 @@ function jitter(level = 1, ms = 700) {
     }, ms);
   } catch {}
 }
-
-/* Backwards compatible name used elsewhere */
 let jitterClassTimer = null;
 function difficultyJitter(level = 1) {
   clearTimeout(jitterClassTimer);
@@ -447,8 +507,8 @@ function pickNextUnsolvedInOrder() {
     if (isGloballySolved(p.signal_id)) continue;
 
     const idx = Number(p.__index) || 1;
-    if (!isSignalUnlocked?.(idx)) return null; // stop: clearance gate blocks further
-    return p; // first available in order
+    if (!isSignalUnlocked?.(idx)) return null; // clearance gate blocks further
+    return p;
   }
   return null;
 }
@@ -462,7 +522,7 @@ function renderSingleSignal(sig) {
       <div class="side-text muted tiny">
         No available fragments right now.<br/>
         Either you solved them, or your clearance gate is locked.<br/><br/>
-        <b>Fragments:</b> ${escapeHtml(String(p.fragments ?? 0))}/100<br/>
+        <b>Fragments:</b> ${escapeHtml(fragText())}<br/>
         <b>Rank:</b> ${escapeHtml(String(p.rank ?? "UNKNOWN"))}
       </div>
     `;
@@ -657,10 +717,20 @@ function wireVaultLogUI() {
 
 /* =======================
    Completion FX (ENGINE overlay)
+   Supports both:
+   - old overlay: #completionOverlay .completion-box p
+   - cinematic overlay: #completionText + #completionVideo
    ======================= */
 function closeCompletionOverlay() {
   const ov = document.getElementById("completionOverlay");
   if (!ov) return;
+
+  const vid = document.getElementById("completionVideo");
+  if (vid) {
+    try { vid.pause(); } catch {}
+    try { vid.currentTime = 0; } catch {}
+  }
+
   ov.classList.remove("show");
   ov.setAttribute("aria-hidden", "true");
 }
@@ -669,6 +739,27 @@ function openCompletionOverlay(textLines) {
   const ov = document.getElementById("completionOverlay");
   if (!ov) return false;
 
+  // Cinematic overlay support
+  const proof = document.getElementById("completionText");
+  if (proof && textLines) proof.textContent = String(textLines);
+
+  const vid = document.getElementById("completionVideo");
+  if (vid) {
+    try {
+      const src = COMPLETION_VIDEO_SRC;
+      if (src && (!vid.getAttribute("data-src") || vid.getAttribute("data-src") !== src)) {
+        vid.setAttribute("data-src", src);
+        vid.src = src;
+      }
+      vid.muted = false;
+      vid.playsInline = true;
+      vid.loop = false;
+      const p = vid.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch {}
+  }
+
+  // Legacy overlay support
   const box = ov.querySelector(".completion-box") || ov;
   const pEl = box.querySelector("p");
   if (pEl && textLines) pEl.textContent = String(textLines);
@@ -684,22 +775,19 @@ async function showCompletionFX() {
 
   const p = getProgress?.() || {};
   const rank = p.rank || "PROTOCOL COMPLETE";
-  const fragments = Number(p.fragments || 0);
 
   const msg =
     "VOID VAULT COMPROMISED\n" +
     `RANK: ${rank}\n` +
-    `FRAGMENTS: ${fragments}/100\n` +
+    `FRAGMENTS: ${fragText()}\n` +
     "PROOF: ACCESS GRANTED";
 
-  // Prefer engine-compatible overlay (your void.html)
   const usedEngineOverlay = openCompletionOverlay(msg);
 
-  // Fallback: terminal proof (in case overlay missing)
   revealDirectHint(
     "⟡ PROTOCOL COMPLETE\n" +
       `⟡ RANK: ${rank}\n` +
-      `⟡ FRAGMENTS: ${fragments}/100\n` +
+      `⟡ FRAGMENTS: ${fragText()}\n` +
       "⟡ PROOF: ACCESS GRANTED",
     { mode: "SYSTEM", key: "COMPLETE", rare: true }
   );
@@ -710,19 +798,22 @@ async function showCompletionFX() {
   jumpToNewest?.();
 
   if (usedEngineOverlay) {
-    // Click-to-dismiss (engine box already has cursor pointer)
     const ov = document.getElementById("completionOverlay");
-    ov?.addEventListener(
-      "click",
-      () => closeCompletionOverlay(),
-      { once: true }
-    );
+    ov?.addEventListener("click", () => closeCompletionOverlay(), { once: true });
+
+    // If autoplay was blocked, clicking the overlay will also attempt play once
+    const vid = document.getElementById("completionVideo");
+    if (vid) {
+      ov?.addEventListener("click", () => { try { vid.play(); } catch {} }, { once: true });
+    }
   }
 }
 
 function maybeTriggerCompletionFX() {
-  const p = getProgress?.() || {};
-  if ((p.fragments || 0) >= 100) showCompletionFX();
+  const total = getTotalFragmentsCount();
+  const solved = getSolvedFragmentsCount();
+  // completion when ALL loaded puzzles are solved (or fallback 100/100 if puzzles not loaded)
+  if (solved >= total) showCompletionFX();
 }
 
 /* =======================
@@ -732,7 +823,7 @@ async function scanForSignals() {
   if (scanning) return;
   scanning = true;
 
-  setPhase("SCANNING");
+  setState("SCANNING");
   setStatus("scanning…");
   showSignalsHelper("Scanning…");
 
@@ -756,6 +847,7 @@ async function scanForSignals() {
 
     setMeter();
     renderVaultLog();
+    renderProgressHeader(); // ✅ after scan
 
     setStatus(`signals loaded (${PUZZLES.length})`);
     Sound.tick("sys");
@@ -771,7 +863,7 @@ async function scanForSignals() {
       revealDirectHint(
         "⟡ SCAN COMPLETE.\nNext fragment selected (SEQUENTIAL).\n" +
           `⟡ Rank: ${prog.rank || "UNKNOWN"}\n` +
-          `⟡ Fragments: ${prog.fragments || 0}/100\n` +
+          `⟡ Fragments: ${fragText()}\n` +
           `⟡ Next: ${chosen.signal_id}`,
         { mode: "SYSTEM", key: "SCAN", rare: true }
       );
@@ -782,7 +874,7 @@ async function scanForSignals() {
       const prog = getProgress?.() || {};
       revealDirectHint(
         "⟡ NO AVAILABLE FRAGMENTS.\nEither all are solved, or clearance gates are locked.\n" +
-          `⟡ Rank: ${prog.rank || "UNKNOWN"} • Fragments: ${prog.fragments || 0}/100`,
+          `⟡ Rank: ${prog.rank || "UNKNOWN"} • Fragments: ${fragText()}`,
         { mode: "SYSTEM", key: "SCAN" }
       );
       jumpToNewest?.();
@@ -817,7 +909,7 @@ async function openSignal(sig) {
   difficultyJitter(sig.difficulty || 1);
 
   setHintMask(sig.hint_mask || "");
-  setPhase("SYNTHESIZING");
+  setState("SYNTHESIZING");
   setStatus("stabilizing signal…");
 
   if (synthesizedFor !== sig.signal_id) {
@@ -825,7 +917,7 @@ async function openSignal(sig) {
       await synthesizeFromPayload(sig.secret_payload, BASE_VAULT_IMG, { signal_id: sig.signal_id });
       synthesizedFor = sig.signal_id;
 
-      setPhase("READY");
+      setState("READY");
       setStatus("signal stabilized");
       Sound.tick("ok");
 
@@ -840,7 +932,7 @@ async function openSignal(sig) {
       jumpToNewest?.();
     } catch (e) {
       setStatus("synthesis failed");
-      setPhase("ERROR");
+      setState("ERROR");
       revealDirectHint(
         "🜏 SYNTHESIS FAILED.\nCheck base image path and payload integrity.\n\n" +
           "Fix checklist:\n" +
@@ -856,7 +948,7 @@ async function openSignal(sig) {
       return;
     }
   } else {
-    setPhase("READY");
+    setState("READY");
     setStatus("signal cached");
     pulse("vault-hit", 180);
   }
@@ -867,7 +959,16 @@ async function openSignal(sig) {
   els.puzMeta &&
     (els.puzMeta.textContent = `Signal: ${sig.signal_id} • ${sig.transmission_type || "SIGNAL"} • Difficulty ${sig.difficulty || 1}`);
   els.puzPrompt && (els.puzPrompt.textContent = sig.prompt ? String(sig.prompt) : "Solve the signal.");
-  if (els.puzPayload) els.puzPayload.value = "";
+
+  // ✅ hide payload by default
+  if (els.puzPayload) {
+    if (DEV_SHOW_PAYLOAD) {
+      els.puzPayload.value = sig.secret_payload || "";
+    } else {
+      els.puzPayload.value = "— ENCRYPTED PAYLOAD —\n(locked)\nSolve to extract intel.\n";
+    }
+  }
+
   if (els.puzAnswer) els.puzAnswer.value = "";
 
   els.puzzleModal.classList.add("show");
@@ -944,7 +1045,7 @@ function terminateSession(signalId) {
   closePuzzle();
 
   setStatus("session terminated");
-  setPhase("LOCKOUT");
+  setState("LOCKOUT");
 
   revealDirectHint(
     `⚠ BRUTE FORCE DETECTED
@@ -1057,6 +1158,7 @@ async function solveActive() {
 
     setMeter();
     renderVaultLog();
+    renderProgressHeader(); // ✅ after solve
 
     setStatus("unlocked");
 
@@ -1073,7 +1175,7 @@ async function solveActive() {
 
     const p = getProgress?.() || {};
     revealDirectHint(
-      "⟡ SOLVED: " + (active.title || active.signal_id) + "\n" + `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${p.fragments || 0}/100`,
+      "⟡ SOLVED: " + (active.title || active.signal_id) + "\n" + `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${fragText()}`,
       { mode: "SYSTEM", key: "SOLVED", rare: true }
     );
     if (active.unlock_fragment) {
@@ -1083,10 +1185,10 @@ async function solveActive() {
     scheduleClosePuzzle(520);
     jumpToNewest?.();
 
-    // ✅ Completion FX (engine overlay)
+    // Completion FX (now triggers at solved == total puzzles)
     maybeTriggerCompletionFX();
 
-    // ✅ NEXT (SEQUENTIAL)
+    // NEXT (SEQUENTIAL)
     const next = pickNextUnsolvedInOrder();
     if (next) {
       markSessionSeen(next.signal_id);
@@ -1177,10 +1279,19 @@ function wireUI() {
     { beep: (t) => Sound.tick(t) }
   );
 
-  // debug: confirms engine is callable + progress is readable
+  // Sync header on boot
+  renderProgressHeader();
+
+  // debug
   try {
     const p = getProgress?.() || {};
-    console.log("[APP] engine OK • progress:", { fragments: p.fragments, rank: p.rank, solved: p.solvedCount });
+    console.log("[APP] engine OK • progress:", {
+      fragments: p.fragments,
+      rank: p.rank,
+      solved: p.solvedCount,
+      dev_payload: DEV_SHOW_PAYLOAD,
+      completion_video: COMPLETION_VIDEO_SRC,
+    });
   } catch (e) {
     console.warn("[APP] getProgress failed:", e);
   }
@@ -1192,11 +1303,8 @@ function wireUI() {
   wireVaultLogUI();
   maybeTriggerCompletionFX();
 
-  // Completion overlay: also allow ESC dismissal (handled in global keydown below)
   const completion = document.getElementById("completionOverlay");
-  if (completion) {
-    completion.setAttribute("aria-hidden", completion.classList.contains("show") ? "false" : "true");
-  }
+  if (completion) completion.setAttribute("aria-hidden", completion.classList.contains("show") ? "false" : "true");
 
   els.scanBtn?.addEventListener("click", () => scanForSignals());
 
@@ -1225,7 +1333,7 @@ function wireUI() {
       const p = getProgress?.() || {};
       const logCount = getLogArray().length;
       revealDirectHint(
-        `⟡ LOCAL PROGRESS\nFragments: ${p.fragments || 0}/100\nRank: ${p.rank || "UNKNOWN"}\nVault Log: ${logCount}`,
+        `⟡ LOCAL PROGRESS\nFragments: ${fragText()}\nRank: ${p.rank || "UNKNOWN"}\nVault Log: ${logCount}`,
         { mode: "SYSTEM", key: "PROGRESS", rare: true }
       );
     } catch {}
@@ -1244,7 +1352,7 @@ function wireUI() {
     pulse("vault-hit", 160);
   });
 
-  // Puzzle modal controls
+  // Puzzle modal
   els.puzClose?.addEventListener("click", closePuzzle);
   els.puzzleModal?.addEventListener("click", (e) => {
     if (e.target === els.puzzleModal) closePuzzle();
@@ -1283,11 +1391,11 @@ function wireUI() {
       closePuzzle();
       closeOnboarding();
       closeLogModal();
-      closeCompletionOverlay(); // ✅ now closes completion too
+      closeCompletionOverlay();
     }
   });
 
-  // Onboarding close + click outside
+  // Onboarding close
   els.closeOnboarding?.addEventListener("click", closeOnboarding);
   els.onboarding?.addEventListener("click", (e) => {
     if (e.target === els.onboarding) closeOnboarding();
@@ -1326,7 +1434,7 @@ function wireUI() {
     catch { prompt("Copy:", v); }
   });
 
-  // Clear progress (clears local progression too)
+  // Reset progress
   els.clearProgress?.addEventListener("click", () => {
     const ok = typeof window.confirm === "function" ? confirm("Reset ALL progress and logs?") : true;
     if (!ok) return;
@@ -1351,6 +1459,8 @@ function wireUI() {
 
     setMeter();
     renderVaultLog();
+    renderProgressHeader(); // ✅ after reset
+
     setStatus("progress reset");
     revealDirectHint("⟡ PROGRESS RESET.\nLocal vault cleared.\nScan again to get the next fragment.", {
       mode: "SYSTEM",
@@ -1376,10 +1486,12 @@ async function boot() {
   wireUI();
   await scanForSignals();
 
+  renderProgressHeader(); // ✅ keep header synced post-initial scan
+
   const p = getProgress?.() || {};
   revealDirectHint(
     "⟡ SIGNAL HUNTER ONLINE.\nSCAN selects the next fragment in order.\nSolve to unlock the next.\n\n" +
-      `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${p.fragments || 0}/100`,
+      `⟡ Rank: ${p.rank || "UNKNOWN"} • Fragments: ${fragText()}`,
     { mode: "SYSTEM", key: "BOOT", rare: true }
   );
   pulse("vault-hit", 220);

@@ -1,7 +1,9 @@
 // vault-engine.js (FINAL FIX) — FULL FILE (NO MISSING PARTS)
 // ✅ FIXES: your “no animations” problem by moving FX classes off <body> onto #hudFx overlay layer
 // ✅ Keeps phase badge pop (rank-pop) reliable
-// ✅ Uses your existing void.html overlay: #vaultComplete (copy/close buttons) + click outside + ESC close
+// ✅ Completion overlay now supports BOTH:
+//    - #completionOverlay (your current void.html)
+//    - #vaultComplete (older variant with copy/close buttons)
 // ✅ Keeps exports/signatures compatible with app.js
 //
 // IMPORTANT:
@@ -28,7 +30,7 @@ let LAST_SYNTH_KEY = null;
 let WIRED = { newestClick: false, scrollWatch: false, overlayClose: false, escClose: false };
 
 // overlay state
-let OVERLAY = { el: null, hideTimer: null, lastCode: "" };
+let OVERLAY = { el: null, type: "", hideTimer: null, lastCode: "" };
 
 /* ================================
    Storage helpers (LOCAL ONLY, SAFE)
@@ -247,88 +249,133 @@ function badgePop() {
 }
 
 /* ================================
-   ✅ Completion overlay (uses void.html #vaultComplete)
+   ✅ Completion overlay (supports BOTH void.html variants)
+   - Preferred: #completionOverlay (your current void.html)
+   - Also supports: #vaultComplete (older variant with copy/close buttons)
    ================================ */
+
+function detectCompletionOverlay() {
+  // Newer/engine-compatible (your void.html in this project)
+  const completion = document.getElementById("completionOverlay");
+  if (completion) return { type: "completionOverlay", el: completion };
+
+  // Older variant (if you ever switch back)
+  const vault = document.getElementById("vaultComplete");
+  if (vault) return { type: "vaultComplete", el: vault };
+
+  return null;
+}
+
 function ensureCompletionOverlay() {
   try {
-    // Preferred: use existing overlay in void.html
-    let overlay = document.getElementById("vaultComplete");
-
-    // Fallback: if not present, create a minimal one (still works)
-    if (!overlay) {
-      overlay = document.createElement("div");
-      overlay.id = "vaultComplete";
-      overlay.className = "vault-complete";
-      overlay.innerHTML = `
-        <div class="card">
-          <div class="title">VAULT OPEN // PROTOCOL COMPLETE</div>
-          <div id="vaultCompleteText" class="text"></div>
-          <div class="modal-actions" style="margin-top:14px">
-            <button id="vaultCompleteCopy" class="btn ghost" type="button">COPY CODE</button>
-            <button id="vaultCompleteClose" class="btn primary" type="button">CLOSE</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
+    // 1) Use existing overlay if present
+    const found = detectCompletionOverlay();
+    if (found) {
+      OVERLAY.el = found.el;
+      OVERLAY.type = found.type;
+      wireCompletionOverlay(found.type, found.el);
+      return found.el;
     }
+
+    // 2) Fallback: create a minimal overlay (vaultComplete-style)
+    const overlay = document.createElement("div");
+    overlay.id = "vaultComplete";
+    overlay.className = "vault-complete";
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.innerHTML = `
+      <div class="card">
+        <div class="title">VAULT OPEN // PROTOCOL COMPLETE</div>
+        <div id="vaultCompleteText" class="text"></div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button id="vaultCompleteCopy" class="btn ghost" type="button">COPY CODE</button>
+          <button id="vaultCompleteClose" class="btn primary" type="button">CLOSE</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
 
     OVERLAY.el = overlay;
+    OVERLAY.type = "vaultComplete";
+    wireCompletionOverlay("vaultComplete", overlay);
+    return overlay;
+  } catch {
+    return null;
+  }
+}
 
-    // Wire close handlers once
-    if (!WIRED.overlayClose) {
-      WIRED.overlayClose = true;
+function wireCompletionOverlay(type, overlay) {
+  if (!overlay) return;
 
-      // click outside card closes
-      overlay.addEventListener("click", (e) => {
-        const card = overlay.querySelector(".card");
-        if (card && card.contains(e.target)) return;
-        hideCompletionOverlay();
-      });
+  // Wire once globally (safe even if called multiple times)
+  if (!WIRED.overlayClose) {
+    WIRED.overlayClose = true;
 
-      // close button
-      const closeBtn = overlay.querySelector("#vaultCompleteClose");
-      if (closeBtn) closeBtn.addEventListener("click", () => hideCompletionOverlay());
-
-      // copy button
-      const copyBtn = overlay.querySelector("#vaultCompleteCopy");
-      if (copyBtn) {
-        copyBtn.addEventListener("click", async () => {
-          const text = OVERLAY.lastCode || "";
-          if (!text) return;
-          try {
-            await navigator.clipboard.writeText(text);
-            setStatus("code copied");
-            HOOKS.beep?.("ok");
-            pulseBody("vault-hit", 220);
-          } catch {
-            // fallback
-            try {
-              prompt("Copy code:", text);
-            } catch {}
-          }
-        });
-      }
-
-      // Click card to dismiss (hacker “tap to dismiss” feel)
-      const card = overlay.querySelector(".card");
-      if (card) {
-        card.style.cursor = "pointer";
-        card.addEventListener("click", () => hideCompletionOverlay());
-      }
-    }
-
-    // ESC-to-close once
+    // ESC closes
     if (!WIRED.escClose) {
       WIRED.escClose = true;
       window.addEventListener("keydown", (e) => {
         if (e.key === "Escape") hideCompletionOverlay();
       });
     }
-
-    return overlay;
-  } catch {
-    return null;
   }
+
+  // Per-overlay wiring (idempotent via dataset flag)
+  if (overlay.dataset.wired === "1") return;
+  overlay.dataset.wired = "1";
+
+  // Click outside content closes (and for completionOverlay, clicking the box also closes)
+  overlay.addEventListener("click", (e) => {
+    if (type === "completionOverlay") {
+      // If user clicks anywhere on overlay/box: close (your CSS makes box cursor:pointer)
+      hideCompletionOverlay();
+      return;
+    }
+
+    const card = overlay.querySelector(".card");
+    if (card && card.contains(e.target)) return;
+    hideCompletionOverlay();
+  });
+
+  if (type === "vaultComplete") {
+    const closeBtn = overlay.querySelector("#vaultCompleteClose");
+    if (closeBtn) closeBtn.addEventListener("click", () => hideCompletionOverlay());
+
+    const copyBtn = overlay.querySelector("#vaultCompleteCopy");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        const text = OVERLAY.lastCode || "";
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          setStatus("code copied");
+          HOOKS.beep?.("ok");
+          pulseBody("vault-hit", 220);
+        } catch {
+          try { prompt("Copy code:", text); } catch {}
+        }
+      });
+    }
+
+    const card = overlay.querySelector(".card");
+    if (card) {
+      card.style.cursor = "pointer";
+      card.addEventListener("click", () => hideCompletionOverlay());
+    }
+  }
+}
+
+function setCompletionOverlayText(type, overlay, text) {
+  try {
+    if (type === "completionOverlay") {
+      const box = overlay.querySelector(".completion-box") || overlay;
+      const pEl = box.querySelector("p");
+      if (pEl) pEl.textContent = String(text || "");
+      return;
+    }
+    // vaultComplete
+    const out = overlay.querySelector("#vaultCompleteText");
+    if (out) out.textContent = String(text || "");
+  } catch {}
 }
 
 function showCompletionOverlay(text, { autoCloseMs = 0 } = {}) {
@@ -341,13 +388,9 @@ function showCompletionOverlay(text, { autoCloseMs = 0 } = {}) {
     OVERLAY.hideTimer = null;
   }
 
-  // set text if possible
-  try {
-    const out = overlay.querySelector("#vaultCompleteText");
-    if (out) out.textContent = String(text || "");
-  } catch {}
+  const type = OVERLAY.type || (overlay.id === "completionOverlay" ? "completionOverlay" : "vaultComplete");
+  setCompletionOverlayText(type, overlay, text);
 
-  // show
   overlay.classList.add("show");
   overlay.setAttribute("aria-hidden", "false");
 
@@ -362,7 +405,7 @@ function showCompletionOverlay(text, { autoCloseMs = 0 } = {}) {
 
 function hideCompletionOverlay() {
   try {
-    const overlay = OVERLAY.el || document.getElementById("vaultComplete");
+    const overlay = OVERLAY.el || document.getElementById("completionOverlay") || document.getElementById("vaultComplete");
     if (!overlay) return;
     overlay.classList.remove("show");
     overlay.setAttribute("aria-hidden", "true");
