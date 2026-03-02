@@ -3,7 +3,7 @@
  * Logic: XOR Encryption + 100-Char Limit + Idle Reset + 2m Hard Burn
  *
  * ✅ FIXES:
- * - Uses WS_BASE from ../config.js (so production connects to wss://api.myrqai.com, not Pages host)
+ * - Uses WS_BASE from ../config.js (so production connects to wss://myrqai.com, not Pages host)
  * - Safe audio playback (won’t spam errors if blocked)
  * - Better reconnection guard + avoids reconnect after dead
  * - Ensures terminate is idempotent and doesn’t throw
