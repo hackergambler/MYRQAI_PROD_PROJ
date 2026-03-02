@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # Global Migrations (Keep this at the top level)
 [[migrations]]
-tag = "v1" 
+tag = "v2" 
 new_classes = ["GhostRoom"]
 
 # ---------- DEV ENVIRONMENT ----------
@@ -18,7 +18,7 @@ bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
 
 [env.dev.vars]
 ENV = "dev"
-ALLOWED_ORIGIN = "https://myrqai-prod.tibco-tibco-8.pages.dev"
+ALLOWED_ORIGIN = "https://myrqai-development.pages.dev"
 # UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)
 
 
@@ -32,5 +32,5 @@ bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
 
 [env.prod.vars]
 ENV = "prod"
-ALLOWED_ORIGIN = "https://myrqai-prod.tibco-tibco-8.pages.dev"
+ALLOWED_ORIGIN = "https://myrqai-prod.pages.dev"
 # UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)
