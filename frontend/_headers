@@ -43,8 +43,10 @@
 
     connect-src
       'self'
-      https://api.myrqai.com
-      wss://api.myrqai.com
+      https://myrqai.com
+      wss://myrqai.com
+      https://www.myrqai.com
+      wss://www.myrqai.com
       https://*.googlesyndication.com
       https://*.doubleclick.net
       https://*.google.com

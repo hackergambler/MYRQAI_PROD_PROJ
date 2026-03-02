@@ -85,7 +85,7 @@ async function send() {
     output.innerText = "> ENCRYPTION_COMPLETE. ESTABLISHING_UPLINK...";
 
     // ---------------- SEND TO SERVER ----------------
-    const r = await fetch(`${API}/send`, {
+    const r = await fetch(`${API}/api/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, data: encrypted })
