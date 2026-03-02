@@ -10,7 +10,7 @@
  *
  * REQUIREMENT:
  * - ghost.html must load this file as a module:
- *   <script type="module" src="ghost-engine.js"></script>
+ *   <script type="module" src="ghost/ghost-engine.js"></script>
  */
 
 import { WS_BASE } from "../config.js";
