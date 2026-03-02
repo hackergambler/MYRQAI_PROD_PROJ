@@ -111,7 +111,7 @@ async function unlock() {
 
     showResult("SYS: ATTEMPTING_HANDSHAKE...", "#00ff41");
 
-    const response = await fetch(`${API}/get`, {
+    const response = await fetch(`${API}/api/get`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key }),
