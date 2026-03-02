@@ -1,0 +1,224 @@
+/* css/persona-cards.css
+   MYRQAI Persona Engine — Final Stable Build
+   ------------------------------------------------
+   ✓ Blue cyber theme
+   ✓ Scroll safe
+   ✓ Smooth motion
+   ✓ Works across all persona pages
+*/
+
+/* ===== Theme Defaults ===== */
+:root{
+  --cyber-blue: #38bdf8;
+  --dark: #020617;
+
+  --card-border: rgba(56,189,248,.28);
+  --card-border-hover: rgba(56,189,248,.48);
+  --card-bg: rgba(2,6,23,.65);
+  --card-bg-soft: rgba(2,6,23,.45);
+
+  --text-main: rgba(235,250,255,.95);
+  --text-soft: rgba(235,250,255,.75);
+
+  --glow: 0 0 28px rgba(56,189,248,.18);
+  --glow-strong: 0 0 38px rgba(56,189,248,.32);
+}
+
+/* ===== Result Title ===== */
+.result-title{
+  font-size: 15px;
+  letter-spacing: .16em;
+  margin: 10px 0 14px;
+  color: var(--cyber-blue);
+  text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(56,189,248,.35);
+}
+
+/* ===== Card Base ===== */
+.card{
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  border-radius: 14px;
+  padding: 16px;
+  margin: 14px 0;
+  backdrop-filter: blur(6px);
+  box-shadow: var(--glow);
+  transition: all .2s ease;
+  word-wrap: break-word;
+}
+
+.card:hover{
+  transform: translateY(-2px);
+  border-color: var(--card-border-hover);
+  box-shadow: var(--glow-strong);
+}
+
+/* ===== Card Headings ===== */
+.card-h{
+  font-size: 15px;
+  margin-bottom: 10px;
+  color: var(--cyber-blue);
+  letter-spacing: .05em;
+}
+
+/* ===== Card Text ===== */
+.card-s,
+.card-p{
+  margin: 7px 0;
+  color: var(--text-main);
+  opacity: .92;
+  line-height: 1.55;
+}
+
+.card-a{
+  margin-top: 10px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.card b{
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.card-a span{
+  color: #ffffff;
+}
+
+/* ===== Feedback Section ===== */
+.feedback{
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.feedback .q{
+  font-size: 13px;
+  color: var(--text-soft);
+  opacity: .85;
+}
+
+.feedback button{
+  border: 1px solid rgba(56,189,248,.4);
+  background: rgba(2,6,23,.85);
+  color: var(--cyber-blue);
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: .05em;
+  transition: all .15s ease;
+}
+
+.feedback button:hover{
+  background: rgba(56,189,248,.15);
+  box-shadow: 0 0 18px rgba(56,189,248,.35);
+  transform: translateY(-1px);
+}
+
+.feedback button:active{
+  transform: translateY(0px);
+}
+
+.feedback button:focus{
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(56,189,248,.25),
+              0 0 24px rgba(56,189,248,.4);
+}
+
+.card.locked{
+  opacity: .75;
+  filter: saturate(.9);
+}
+
+.card.locked .feedback button{
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* ===== Persona Pro Synthesis ===== */
+.synthesis{
+  border: 1px dashed rgba(56,189,248,.45);
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 18px;
+  background: var(--card-bg-soft);
+  box-shadow: 0 0 26px rgba(56,189,248,.18);
+}
+
+.syn-h{
+  color: var(--cyber-blue);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.syn-p{
+  margin: 7px 0;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.syn-list{
+  margin: 10px 0 0 18px;
+  color: var(--text-main);
+}
+
+.syn-list li{
+  margin: 6px 0;
+}
+
+/* ===== Future Mode Bars ===== */
+.bars{
+  margin: 12px 0 18px;
+}
+
+.barrow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.barlabel{
+  width: 110px;
+  font-size: 13px;
+  color: var(--text-soft);
+  letter-spacing: .03em;
+}
+
+.bartrack{
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(56,189,248,.16);
+  border: 1px solid rgba(56,189,248,.22);
+  overflow: hidden;
+}
+
+.barfill{
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg,
+    rgba(56,189,248,.55),
+    rgba(96,212,255,.85)
+  );
+  box-shadow: 0 0 16px rgba(56,189,248,.45);
+  transition: width .6s ease;
+}
+
+.barpct{
+  width: 52px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* ===== Mobile Optimization ===== */
+@media (max-width: 520px){
+  .barlabel{ width: 92px; }
+  .card{ padding: 14px; }
+  .result-title{ font-size: 14px; }
+}
