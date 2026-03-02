@@ -1,16 +1,18 @@
 /**
- * MYRQAI GhostTrace Engine - CLOUDFLARE EDITION (FIXED FOR PROD)
+ * MYRQAI GhostTrace Engine - CLOUDFLARE EDITION (FIXED FOR PROD + ROOM UI)
  * Logic: XOR Encryption + 100-Char Limit + Idle Reset + 2m Hard Burn
  *
  * ✅ FIXES:
- * - Uses WS_BASE from ../config.js (so production connects to wss://myrqai.com, not Pages host)
- * - Safe audio playback (won’t spam errors if blocked)
+ * - Uses WS_BASE from ../config.js (so production connects to wss://myrqai.com)
+ * - Auto-connects on page load (initSocket())
+ * - Exposes room id + share link in UI if elements exist
+ * - Safe audio playback
  * - Better reconnection guard + avoids reconnect after dead
  * - Ensures terminate is idempotent and doesn’t throw
  *
  * REQUIREMENT:
  * - ghost.html must load this file as a module:
- *   <script type="module" src="ghost/ghost-engine.js"></script>
+ *   <script type="module" src="/ghost/ghost-engine.js"></script>
  */
 
 import { WS_BASE } from "../config.js";
@@ -32,10 +34,48 @@ const roomId = secretKey.replace(/[^a-zA-Z0-9]/g, "").substring(0, 10);
 
 const chatBox = document.getElementById("chat-box");
 const input = document.getElementById("msg-input");
-
 if (input) input.setAttribute("maxlength", "100");
 
-// 3. Connection Config (PROD-SAFE)
+// 2.1 Room UI helpers (optional elements)
+function renderRoomInfo() {
+  const roomEl = document.getElementById("room-id");      // optional
+  const linkEl = document.getElementById("room-link");    // optional (input or span)
+  const copyBtn = document.getElementById("copy-link");   // optional
+
+  const shareUrl = `${location.origin}/ghost/ghost.html#${secretKey}`;
+
+  if (roomEl) roomEl.textContent = roomId;
+
+  if (linkEl) {
+    // supports <input> or <span>/<div>
+    if ("value" in linkEl) linkEl.value = shareUrl;
+    else linkEl.textContent = shareUrl;
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        systemMessage("LINK_COPIED");
+      } catch {
+        // fallback
+        try {
+          const tmp = document.createElement("input");
+          tmp.value = shareUrl;
+          document.body.appendChild(tmp);
+          tmp.select();
+          document.execCommand("copy");
+          tmp.remove();
+          systemMessage("LINK_COPIED");
+        } catch {
+          systemMessage("COPY_FAILED");
+        }
+      }
+    });
+  }
+}
+
+// 3. Connection Config
 const socketUrl = `${WS_BASE}/api/ghost/${roomId}`;
 
 let socket;
@@ -48,7 +88,11 @@ function initSocket() {
 
   // avoid double sockets
   try {
-    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    if (
+      socket &&
+      (socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
   } catch {}
@@ -71,15 +115,11 @@ function initSocket() {
     try {
       const packet = JSON.parse(event.data);
 
-      // Standard ghost messages
       if (packet.type === "ghost-msg") {
         const decrypted = xorCipher(atob(packet.data), secretKey);
-        // audio may be blocked until user interaction; ignore silently
         beep.play().catch(() => {});
         displayMessage(decrypted, "them");
-      }
-      // System errors (Idle kick, Expiry, etc.)
-      else if (packet.type === "sys-err") {
+      } else if (packet.type === "sys-err") {
         systemMessage("ALERT: " + packet.data);
         if (
           String(packet.data).includes("TERMINATION") ||
@@ -89,7 +129,7 @@ function initSocket() {
           terminateAndRedirect();
         }
       }
-    } catch (e) {
+    } catch {
       console.error("❌ INCOMING PACKET CORRUPT");
     }
   };
@@ -109,7 +149,6 @@ function initSocket() {
       return;
     }
 
-    // Reconnect for transient disconnects only
     if (!isDead) {
       console.log("Reconnecting...");
       reconnectTimer = setTimeout(() => initSocket(), 2000);
@@ -145,8 +184,7 @@ function terminateAndRedirect() {
   } catch {}
 
   setTimeout(() => {
-    // from /ghost/ back to /index.html
-    window.location.href = "../index.html";
+    window.location.href = "/index.html";
   }, 2000);
 }
 
@@ -155,9 +193,7 @@ function xorCipher(text, key) {
   return text
     .split("")
     .map((char, i) =>
-      String.fromCharCode(
-        char.charCodeAt(0) ^ key.charCodeAt(i % key.length)
-      )
+      String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(i % key.length))
     )
     .join("");
 }
@@ -195,15 +231,12 @@ async function sendMessage() {
   }
 
   try {
-    // RESET the frontend idle timer in ghost.html (if present)
     if (typeof window.idleSeconds !== "undefined") {
       window.idleSeconds = 0;
     }
 
-    // Encrypt then base64 encode
     const encrypted = btoa(xorCipher(text, secretKey));
 
-    // Worker/DO expects JSON payload
     const payload = JSON.stringify({
       type: "ghost-msg",
       data: encrypted,
@@ -261,3 +294,19 @@ function displayMessage(text, type) {
 function systemMessage(text) {
   displayMessage("[SYS] " + text, "them");
 }
+
+// ✅ Auto-init on page load
+window.addEventListener("DOMContentLoaded", () => {
+  renderRoomInfo();
+  initSocket();
+
+  // Optional: Enter to send
+  if (input) {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  }
+});
