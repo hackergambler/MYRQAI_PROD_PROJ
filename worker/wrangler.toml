@@ -3,34 +3,49 @@ main = "worker.js"
 compatibility_date = "2026-02-20"
 compatibility_flags = ["nodejs_compat"]
 
-# Global Migrations (Keep this at the top level)
+############################
+# GLOBAL DURABLE OBJECTS
+############################
+
 [[migrations]]
-tag = "v2" 
+tag = "v1"
 new_classes = ["GhostRoom"]
 
-# ---------- DEV ENVIRONMENT ----------
+############################
+# DEVELOPMENT ENVIRONMENT
+############################
+
 [env.dev]
 name = "myrqai-development"
 
-# You must repeat the binding here for the 'dev' environment
 [env.dev.durable_objects]
-bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
+bindings = [
+  { name = "GHOST_ROOMS", class_name = "GhostRoom" }
+]
 
 [env.dev.vars]
 ENV = "dev"
-ALLOWED_ORIGIN = "https://myrqai-development.pages.dev"
-# UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)
+ALLOWED_ORIGINS = "https://myrqai-development.pages.dev,http://localhost:8788,http://127.0.0.1:8788"
 
 
-# ---------- PROD ENVIRONMENT ----------
+############################
+# PRODUCTION ENVIRONMENT
+############################
+
 [env.prod]
 name = "myrqai-prod"
 
-# You must repeat the binding here for the 'prod' environment
+# Route your worker on main domain under /api*
+routes = [
+  { pattern = "myrqai.com/api*", zone_name = "myrqai.com" },
+  { pattern = "www.myrqai.com/api*", zone_name = "myrqai.com" }
+]
+
 [env.prod.durable_objects]
-bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
+bindings = [
+  { name = "GHOST_ROOMS", class_name = "GhostRoom" }
+]
 
 [env.prod.vars]
 ENV = "prod"
-ALLOWED_ORIGIN = "https://myrqai-prod.pages.dev"
-# UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)
+ALLOWED_ORIGINS = "https://myrqai.com,https://www.myrqai.com,https://myrqai-prod.tibco-tibco-8.pages.dev"
