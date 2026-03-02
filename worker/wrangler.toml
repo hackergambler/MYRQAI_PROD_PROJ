@@ -18,7 +18,7 @@ bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
 
 [env.dev.vars]
 ENV = "dev"
-ADMIN_TOKEN = "MYRQAI_SUPER_SECRET_123"
+ALLOWED_ORIGIN = "https://myrqai-prod.tibco-tibco-8.pages.dev"
 # UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)
 
 
@@ -32,5 +32,5 @@ bindings = [{name = "GHOST_ROOMS", class_name = "GhostRoom"}]
 
 [env.prod.vars]
 ENV = "prod"
-ADMIN_TOKEN = "MYRQAI_SUPER_SECRET_123"
+ALLOWED_ORIGIN = "https://myrqai-prod.tibco-tibco-8.pages.dev"
 # UPSTASH_REDIS_REST_URL = "..." (Add your Redis URL here)

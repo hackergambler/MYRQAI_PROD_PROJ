@@ -260,7 +260,7 @@ function draw() {
 setInterval(draw, 35);
 
 /* LOGIN LOGIC */
-const API = "https://myrqai-prod.tibco-tibco-8.workers.dev";
+const API = window.MYRQAI_API_BASE;
 
 async function login() {
   const secret = document.getElementById("secret").value.trim();

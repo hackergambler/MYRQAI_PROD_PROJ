@@ -1,7 +1,10 @@
 // unlock.js
 import { decryptMessage } from '../crypto.js';
 
-const API = "https://myrqai-prod.tibco-tibco-8.workers.dev";
+import { API_BASE } from "../config.js";
+
+const API = API_BASE;
+
 let isUnlocking = false;
 let lastUnlockTime = 0;
 

@@ -258,7 +258,7 @@ function matrix() {
 setInterval(matrix, 40);
 
 /* --- API & AUTH LOGIC --- */
-const API = "https://myrqai-prod.tibco-tibco-8.workers.dev";
+const API = window.MYRQAI_API_BASE;
 const token = localStorage.getItem("admin_token");
 
 // Redirect if not logged in

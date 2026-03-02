@@ -1,9 +1,15 @@
-// worker.js — ONLY persona-related parts removed (nothing else touched)
-
-// ❌ REMOVED persona imports
-// import { handlePersona } from "./api/persona";
-// import { handlePersonaPro } from "./api/persona-pro";
-// import { handlePredictFuture } from "./api/predict-future";
+// worker.js — PROD-HARDENED (persona parts removed) + SAFE CORS + DO ORIGIN CHECK + NO STACK LEAKS
+// - ✅ CORS locked to env.ALLOWED_ORIGIN (no wildcard)
+// - ✅ Durable Object WebSocket Origin check
+// - ✅ Removes /api/admin/login (do NOT do admin login from browser)
+// - ✅ Admin routes use x-admin-token header (server-side only) — keep token out of frontend
+// - ✅ Request body size limits + safe JSON parsing
+// - ✅ Safe Redis decode (no crash on bad data)
+// - ✅ Message size limits
+// NOTE: Set these in Cloudflare Worker env:
+//   - ALLOWED_ORIGIN = "https://<your-pages-domain>" (or custom domain)
+//   - ADMIN_TOKEN as a Wrangler secret
+//   - UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN as secrets/vars
 
 const PREFIX = "securemsg:";
 
@@ -12,10 +18,10 @@ export class GhostRoom {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.sessions = new Map(); 
+    this.sessions = new Map();
     this.startTime = Date.now();
-    this.ROOM_TTL = 120000; // 2 Minutes (120,000ms)
-    this.IDLE_LIMIT = 55000; // 55 Seconds (gives frontend 5s headstart to redirect)
+    this.ROOM_TTL = 120000; // 2 Minutes
+    this.IDLE_LIMIT = 55000; // 55 Seconds
   }
 
   async fetch(request) {
@@ -24,10 +30,16 @@ export class GhostRoom {
         return new Response("Expected WebSocket", { status: 426 });
       }
 
+      // ✅ Origin lock for WebSocket
+      const origin = request.headers.get("Origin") || "";
+      const allowed = this.env.ALLOWED_ORIGIN || "";
+      if (allowed && origin !== allowed) {
+        return new Response("Forbidden", { status: 403 });
+      }
+
       const now = Date.now();
-      // If room is older than 2 mins, deny any new entry
       if (now - this.startTime > this.ROOM_TTL) {
-        return new Response("ROOM_EXPIRED", { status: 410, headers: corsHeaders });
+        return new Response("ROOM_EXPIRED", { status: 410 });
       }
 
       const pair = new WebSocketPair();
@@ -35,31 +47,27 @@ export class GhostRoom {
 
       await this.handleSession(server);
 
-      return new Response(null, { 
-        status: 101, 
+      // ✅ Do NOT attach CORS headers to WS upgrade response
+      return new Response(null, {
+        status: 101,
         webSocket: client,
-        headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-        }
       });
     } catch (err) {
-      return new Response(err.stack, { status: 500 });
+      console.error("GhostRoom crash:", err);
+      return new Response("Internal Error", { status: 500 });
     }
   }
 
   async handleSession(server) {
     server.accept();
-    
-    // Session state with individual idle timer
-    const sessionData = { 
+
+    const sessionData = {
       lastMsgTime: Date.now(),
-      idleTimer: null 
+      idleTimer: null,
     };
-    
+
     this.sessions.set(server, sessionData);
 
-    // Function to handle inactivity kill-switch
     const resetIdleTimeout = () => {
       if (sessionData.idleTimer) clearTimeout(sessionData.idleTimer);
       sessionData.idleTimer = setTimeout(() => {
@@ -70,48 +78,56 @@ export class GhostRoom {
       }, this.IDLE_LIMIT);
     };
 
-    resetIdleTimeout(); // Start idle clock on connection
+    resetIdleTimeout();
 
     server.addEventListener("message", async (msg) => {
       try {
         const now = Date.now();
-        
-        // 1. Room Lifetime Check (The 2-Minute Wall)
+
+        // 1) Room TTL
         if (now - this.startTime > this.ROOM_TTL) {
-          server.send(JSON.stringify({ type: "sys-err", data: "SESSION_EXPIRED" }));
-          setTimeout(() => server.close(1001, "TTL_REACHED"), 50);
+          try {
+            server.send(JSON.stringify({ type: "sys-err", data: "SESSION_EXPIRED" }));
+          } catch {}
+          setTimeout(() => {
+            try {
+              server.close(1001, "TTL_REACHED");
+            } catch {}
+          }, 50);
           return;
         }
 
-        // 2. Data Validation (JSON Check)
+        // 2) JSON validation
         let packet;
         try {
           packet = JSON.parse(msg.data);
-        } catch(e) {
-          return; // Ignore malformed raw data
-        }
-
-        // 3. Character Limit (Base64 check)
-        // A 100-char message in Base64 is roughly 136 chars.
-        if (packet.data && packet.data.length > 200) {
-          server.send(JSON.stringify({ type: "sys-err", data: "PACKET_SIZE_VIOLATION" }));
-          server.close(1008, "Policy Violation");
+        } catch {
           return;
         }
 
-        // 4. Spam Throttling (1.5s)
+        // 3) Packet size limit (base64-ish)
+        if (packet?.data && String(packet.data).length > 200) {
+          try {
+            server.send(JSON.stringify({ type: "sys-err", data: "PACKET_SIZE_VIOLATION" }));
+          } catch {}
+          try {
+            server.close(1008, "Policy Violation");
+          } catch {}
+          return;
+        }
+
+        // 4) Spam throttling (1.5s)
         if (now - sessionData.lastMsgTime < 1500) {
-          server.send(JSON.stringify({ type: "sys-err", data: "THROTTLED" }));
+          try {
+            server.send(JSON.stringify({ type: "sys-err", data: "THROTTLED" }));
+          } catch {}
           return;
         }
 
-        // Success: Update activity and reset idle clock
         sessionData.lastMsgTime = now;
         resetIdleTimeout();
 
-        // Broadcast to others
         this.broadcast(packet.data, server);
-        
       } catch (e) {
         console.error("DO Msg Error:", e);
       }
@@ -129,7 +145,7 @@ export class GhostRoom {
   broadcast(data, sender) {
     const packet = JSON.stringify({ type: "ghost-msg", data: data });
     for (const [socket] of this.sessions) {
-      if (socket !== sender && socket.readyState === 1) { 
+      if (socket !== sender && socket.readyState === 1) {
         try {
           socket.send(packet);
         } catch (e) {
@@ -149,85 +165,96 @@ export default {
       const ip = req.headers.get("CF-Connecting-IP") || "0.0.0.0";
       const country = req.cf?.country || "XX";
 
-      if (req.method === "OPTIONS") return cors();
+      if (req.method === "OPTIONS") return cors(req, env);
 
       /* ---------- GHOST CHAT (DURABLE OBJECTS) ---------- */
       if (path.includes("/api/ghost/")) {
         const parts = path.split("/").filter(Boolean);
         const roomId = parts[parts.length - 1];
-        
-        if (!roomId || roomId.length < 5) return json({ error: "Invalid Room" }, 400);
+
+        if (!roomId || roomId.length < 5) return json(req, env, { error: "Invalid Room" }, 400);
 
         const id = env.GHOST_ROOMS.idFromName(roomId);
         const roomObject = env.GHOST_ROOMS.get(id);
 
+        // DO will enforce Origin check too
         return roomObject.fetch(req);
       }
 
-      /* ---------- AI & REMAINING ROUTES ---------- */
-      if (path === "/health") return json({ status: "ok", time: new Date().toISOString() });
+      /* ---------- HEALTH ---------- */
+      if (path === "/health") return json(req, env, { status: "ok", time: new Date().toISOString() });
 
-      // ❌ REMOVED persona AI routes block:
-      // const aiRoutes = ["/api/persona", "/api/persona-pro", "/api/predict-future"];
-      // if (aiRoutes.includes(path)) {
-      //   if (req.method !== "POST") return methodNotAllowed();
-      //   let result;
-      //   if (path === "/api/persona") result = await handlePersona(req);
-      //   else if (path === "/api/persona-pro") result = await handlePersonaPro(req);
-      //   else if (path === "/api/predict-future") result = await handlePredictFuture(req);
-      //   return result instanceof Response ? withCors(result) : json(result);
-      // }
-
-      if (path.startsWith("/api/admin/")) {
-        if (!verifyAdmin(req, env)) return json({ error: "Unauthorized" }, 401);
-        if (path === "/api/admin/login" && req.method === "POST") return adminLogin(req, env);
-        if (path === "/api/admin/stats") return await adminStats(env);
+      /* ---------- ADMIN ---------- */
+      // ✅ Remove /api/admin/login completely (never do admin login from browser)
+      // ✅ Only keep server-side token check
+      if (path === "/api/admin/stats") {
+        if (!verifyAdmin(req, env)) return json(req, env, { error: "Unauthorized" }, 401);
+        return await adminStats(req, env);
       }
 
+      /* ---------- RATE LIMIT (GLOBAL) ---------- */
       if (await rateLimitIP(ip, env)) {
-        return json({ error: "Too many requests" }, 429);
+        return json(req, env, { error: "Too many requests" }, 429);
       }
 
-      if (path === "/send") return req.method === "POST" ? await send(req, env, ip, country) : methodNotAllowed();
-      if (path === "/get") return req.method === "POST" ? await get(req, env) : methodNotAllowed();
+      /* ---------- SECURE MSG ROUTES ---------- */
+      if (path === "/send") return req.method === "POST" ? await send(req, env, ip, country) : methodNotAllowed(req, env);
+      if (path === "/get") return req.method === "POST" ? await get(req, env) : methodNotAllowed(req, env);
 
-      return json({ error: "Route not found" }, 404);
-
+      return json(req, env, { error: "Route not found" }, 404);
     } catch (err) {
       console.error("Worker Global Crash:", err);
-      return json({ error: "Internal Server Error" }, 500);
+      return json(req, env, { error: "Internal Server Error" }, 500);
     }
-  }
+  },
 };
 
 /* ---------------- 3. HELPERS ---------------- */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, x-admin-token, Upgrade",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-};
+function corsHeaders(req, env) {
+  const origin = req.headers.get("Origin") || "";
+  const allowed = env.ALLOWED_ORIGIN || "";
 
-const cors = () => new Response(null, { status: 204, headers: corsHeaders });
+  const ok = allowed && origin === allowed;
 
-function withCors(res) {
+  return {
+    "Access-Control-Allow-Origin": ok ? origin : allowed || "null",
+    "Vary": "Origin",
+    "Access-Control-Allow-Headers": "Content-Type", // ✅ keep minimal
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  };
+}
+
+const cors = (req, env) => new Response(null, { status: 204, headers: corsHeaders(req, env) });
+
+function withCors(req, env, res) {
   const h = new Headers(res.headers);
-  for (const [k, v] of Object.entries(corsHeaders)) h.set(k, v);
+  for (const [k, v] of Object.entries(corsHeaders(req, env))) h.set(k, v);
   return new Response(res.body, { status: res.status, headers: h });
 }
 
-const json = (data, status = 200) =>
+const json = (req, env, data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders }
+    headers: { "Content-Type": "application/json", ...corsHeaders(req, env) },
   });
 
-const methodNotAllowed = () => json({ error: "Method Not Allowed" }, 405);
+const methodNotAllowed = (req, env) => json(req, env, { error: "Method Not Allowed" }, 405);
+
+async function readJson(req, maxBytes = 10_000) {
+  const len = Number(req.headers.get("Content-Length") || "0");
+  if (len && len > maxBytes) return null;
+  try {
+    return await req.json();
+  } catch {
+    return null;
+  }
+}
 
 async function redis(env, cmd) {
   try {
     const res = await fetch(`${env.UPSTASH_REDIS_REST_URL}/${cmd}`, {
-      headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_REST_TOKEN}` }
+      headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_REST_TOKEN}` },
     });
     return res.ok ? await res.json() : { result: null };
   } catch (e) {
@@ -251,47 +278,77 @@ async function rateLimitKey(key, env) {
   return count > 15;
 }
 
-const validKey = k => /^[A-Z0-9]{6,12}$/.test(k);
+const validKey = (k) => /^[A-Z0-9]{6,12}$/.test(k);
 
 async function send(req, env, ip, country) {
-  const body = await req.json().catch(() => null);
-  if (!body || !validKey(body.key) || !body.data) return json({ error: "Invalid Data" }, 400);
-  if (await rateLimitKey(body.key, env)) return json({ error: "Limit Exceeded" }, 429);
+  const body = await readJson(req, 15_000);
+  if (!body || !validKey(body.key) || typeof body.data !== "string") {
+    return json(req, env, { error: "Invalid Data" }, 400);
+  }
+
+  // ✅ message size limit (client-encrypted payload)
+  if (body.data.length > 5000) return json(req, env, { error: "Message too large" }, 413);
+
+  if (await rateLimitKey(body.key, env)) return json(req, env, { error: "Limit Exceeded" }, 429);
 
   const redisKey = `${PREFIX}msg:${body.key}`;
   const existing = await redis(env, `GET/${redisKey}`);
-  let messages = existing.result ? JSON.parse(atob(existing.result)) : [];
-  if (messages.length >= 5) return json({ error: "Full" }, 429);
+
+  let messages = [];
+  if (existing.result) {
+    try {
+      messages = JSON.parse(atob(existing.result));
+      if (!Array.isArray(messages)) messages = [];
+    } catch {
+      messages = [];
+    }
+  }
+
+  if (messages.length >= 5) return json(req, env, { error: "Full" }, 429);
 
   messages.push(body.data);
+
   await redis(env, `SET/${redisKey}/${btoa(JSON.stringify(messages))}`);
   await redis(env, `EXPIRE/${redisKey}/86400`);
   await incr("stats:send", env);
-  return json({ success: true });
+
+  return json(req, env, { success: true });
 }
 
 async function get(req, env) {
-  const body = await req.json().catch(() => null);
-  if (!body || !validKey(body.key)) return json({ error: "Invalid Key" }, 400);
+  const body = await readJson(req, 5_000);
+  if (!body || !validKey(body.key)) return json(req, env, { error: "Invalid Key" }, 400);
+
   const res = await redis(env, `GETDEL/${PREFIX}msg:${body.key}`);
-  if (!res.result) return json({ found: false });
+  if (!res.result) return json(req, env, { found: false });
+
+  let decoded = [];
+  try {
+    decoded = JSON.parse(atob(res.result));
+    if (!Array.isArray(decoded)) decoded = [];
+  } catch {
+    decoded = [];
+  }
+
   await incr("stats:get", env);
-  return json({ found: true, messages: JSON.parse(atob(res.result)) });
+  return json(req, env, { found: true, messages: decoded });
 }
 
 function verifyAdmin(req, env) {
+  // ✅ strict compare; token must be in Worker secret: ADMIN_TOKEN
   return req.headers.get("x-admin-token") === env.ADMIN_TOKEN;
 }
 
-async function adminLogin(req, env) {
-  const body = await req.json().catch(() => null);
-  return json({ success: body?.secret === env.ADMIN_TOKEN });
-}
-
-async function adminStats(env) {
+// ✅ removed adminLogin (do not do admin login from browser)
+async function adminStats(req, env) {
   const [s, g] = await Promise.all([
     redis(env, `GET/${PREFIX}stats:send`),
-    redis(env, `GET/${PREFIX}stats:get`)
+    redis(env, `GET/${PREFIX}stats:get`),
   ]);
-  return json({ stats: { send: s.result, get: g.result } });
+
+  // normalize to numbers
+  const send = Number(s.result || 0);
+  const get = Number(g.result || 0);
+
+  return json(req, env, { stats: { send, get } });
 }
